@@ -1,10 +1,10 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.4.3
+// Drawn Codes v0.5.0
 // Grid drawing tool: finger crossing a cell boundary sets one of four
-// connection bits per cell (up=1000, right=0100, down=0010, left=0001).
-// One finger draws, two fingers pinch-zoom and pan; the canvas is
-// unbounded. Enclosed areas fill solid (even-odd nesting).
+// orthogonal + four diagonal connection bits per cell. One finger draws,
+// two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
+// areas fill solid (even-odd nesting).
 //
 // Modules: GridModel (sparse cells + undo), FillEngine (enclosure),
 // TileSet (tile geometry), Renderer (screen + export drawing),
@@ -14,11 +14,13 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.4.3"
+const val APP_VERSION = "0.5.0"
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,7 +35,55 @@ class MainActivity : AppCompatActivity() {
         }
 
         drawingView = DrawingView(this)
-        root.addView(drawingView, LinearLayout.LayoutParams(
+
+        // canvas with a quiet chip row floating on top
+        val canvasFrame = FrameLayout(this)
+        canvasFrame.addView(drawingView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        val chipRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(8), dp(8), dp(8), 0)
+        }
+
+        fun chip(label: String, active: () -> Boolean, onTap: () -> Unit): TextView =
+            TextView(this).apply {
+                text = label
+                textSize = 12f
+                setPadding(dp(12), dp(7), dp(12), dp(7))
+                fun restyle() {
+                    if (active()) {
+                        setBackgroundColor(Color.argb(200, 0, 0, 0))
+                        setTextColor(Color.WHITE)
+                    } else {
+                        setBackgroundColor(Color.argb(28, 0, 0, 0))
+                        setTextColor(Color.argb(140, 0, 0, 0))
+                    }
+                }
+                restyle()
+                setOnClickListener { onTap(); restyle() }
+                chipRow.addView(this, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(0, 0, dp(6), 0)
+                })
+            }
+
+        chip("UNDO", { false }) { drawingView.undo() }
+        chipRow.addView(android.view.View(this),
+            LinearLayout.LayoutParams(0, 1, 1f))   // spacer
+        chip("45", { drawingView.allow45 }) { drawingView.allow45 = !drawingView.allow45 }
+        chip("90", { drawingView.allow90 }) { drawingView.allow90 = !drawingView.allow90 }
+        chip("FILL", { drawingView.showFill }) {
+            drawingView.showFill = !drawingView.showFill
+            drawingView.invalidate()
+        }
+
+        canvasFrame.addView(chipRow, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP))
+
+        root.addView(canvasFrame, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         val bar = LinearLayout(this).apply {
@@ -62,7 +112,6 @@ class MainActivity : AppCompatActivity() {
             b.setBackgroundColor(
                 if (drawingView.erasing) Color.rgb(150, 40, 40) else Color.rgb(50, 50, 50))
         }
-        barButton("UNDO") { drawingView.undo() }
         barButton("CLEAR") { drawingView.clearAll() }
         barButton("FIT") { drawingView.fitContent() }
         barButton("SAVE") { saveDrawing() }

@@ -21,6 +21,9 @@ class DrawingView(context: Context) : View(context) {
     private val fillEngine = FillEngine()
 
     var erasing = false
+    var allow45 = true    // recognise 45° moves through corner diamonds
+    var allow90 = true    // draw orthogonal connections
+    var showFill = true   // fill enclosed areas
 
     private enum class Mode { NONE, DRAW, NAV }
     private var mode = Mode.NONE
@@ -79,14 +82,15 @@ class DrawingView(context: Context) : View(context) {
         invalidate()
     }
 
-    fun currentFill(): FillEngine.Fill = fillEngine.fillFor(model)
+    fun currentFill(): FillEngine.Fill =
+        if (showFill) fillEngine.fillFor(model) else FillEngine.Fill.EMPTY
 
     // ---- drawing -------------------------------------------------------
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawGuideGrid(canvas)
-        Renderer.render(canvas, model, fillEngine.fillFor(model),
+        Renderer.render(canvas, model, currentFill(),
             viewport.cellSize,
             -viewport.originX * viewport.cellSize,
             -viewport.originY * viewport.cellSize)
@@ -222,7 +226,7 @@ class DrawingView(context: Context) : View(context) {
         val c = floor(wx).toInt()
         val r = floor(wy).toInt()
 
-        if (!erasing) {   // erasing works on whole cells, corners ignored
+        if (!erasing && allow45) {   // erasing works on whole cells, corners ignored
             // nearest grid corner, in cell units
             val kc = Math.round(wx).toInt()
             val kr = Math.round(wy).toInt()
@@ -249,6 +253,11 @@ class DrawingView(context: Context) : View(context) {
 
     private fun visitCell(c: Int, r: Int) {
         if (c == lastCol && r == lastRow) return
+        if (!erasing && !allow90) {   // orthogonal drawing off: move without ink
+            lastCol = c
+            lastRow = r
+            return
+        }
         var cc = lastCol
         var cr = lastRow
         while (cc != c || cr != r) {
