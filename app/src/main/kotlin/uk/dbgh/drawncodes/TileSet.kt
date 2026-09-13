@@ -190,6 +190,13 @@ object TileSet {
                     // radius a hair past tangent so Path.op never leaves
                     // degenerate slivers at the touch points
                     p.op(sectorFillet(a1, gap, v, rin + 0.75f), Path.Op.UNION)
+                } else if (gap == 45f) {
+                    // narrow wedge between a straight and a diagonal arm:
+                    // its sharp tip lands in the next cell over. Radius is
+                    // capped so the fillet stays against ink even when the
+                    // neighbouring bar ends in a stub cap right after the
+                    // junction ((v+rf)·cot22.5° must stay within one cell).
+                    p.op(sectorFillet(a1, gap, v, s * 0.15f), Path.Op.UNION)
                 }
             }
         }
