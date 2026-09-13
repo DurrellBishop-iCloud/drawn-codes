@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.5.1
+// Drawn Codes v0.6.0
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.5.1"
+const val APP_VERSION = "0.6.0"
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,6 +35,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         drawingView = DrawingView(this)
+        Store.load(this, drawingView)
+        drawingView.onChanged = { Store.save(this, drawingView) }
 
         // canvas with a quiet chip row floating on top
         val canvasFrame = FrameLayout(this)
@@ -120,6 +122,11 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         setContentView(root)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Store.save(this, drawingView)   // catches pan/zoom-only changes too
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()

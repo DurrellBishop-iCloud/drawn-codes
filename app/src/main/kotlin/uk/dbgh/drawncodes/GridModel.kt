@@ -109,6 +109,13 @@ class GridModel {
         version++
     }
 
+    /** Replace all cells (used when loading a saved drawing). */
+    fun restore(newCells: Map<Long, Int>) {
+        cells.clear()
+        cells.putAll(newCells)
+        version++
+    }
+
     // ---- undo ----------------------------------------------------------
 
     fun pushUndo() {

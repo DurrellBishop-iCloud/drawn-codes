@@ -51,6 +51,12 @@ class Viewport {
         originY = bounds.top - 1 - (viewHeight / cellSize - (cellsH - 2)) / 2f
     }
 
+    fun restore(size: Float, ox: Float, oy: Float) {
+        cellSize = size.coerceIn(MIN_CELL, MAX_CELL)
+        originX = ox
+        originY = oy
+    }
+
     fun reset(viewWidth: Int) {
         cellSize = viewWidth / 12f
         originX = 0f

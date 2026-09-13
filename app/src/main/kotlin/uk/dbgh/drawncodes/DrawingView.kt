@@ -25,6 +25,11 @@ class DrawingView(context: Context) : View(context) {
     var allow90 = true    // draw orthogonal connections
     var showFill = true   // fill enclosed areas
 
+    /** Called after anything worth persisting (stroke end, undo, clear). */
+    var onChanged: (() -> Unit)? = null
+    /** Set when a saved viewport was loaded, so layout doesn't reset it. */
+    var viewportRestored = false
+
     private enum class Mode { NONE, DRAW, NAV }
     private var mode = Mode.NONE
 
@@ -65,15 +70,20 @@ class DrawingView(context: Context) : View(context) {
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
-        if (ow == 0) viewport.reset(w)
+        if (ow == 0 && !viewportRestored) viewport.reset(w)
     }
 
-    fun undo() { model.undo(); invalidate() }
+    fun undo() {
+        model.undo()
+        invalidate()
+        onChanged?.invoke()
+    }
 
     fun clearAll() {
         model.pushUndo()
         model.clear()
         invalidate()
+        onChanged?.invoke()
     }
 
     fun fitContent() {
@@ -170,8 +180,10 @@ class DrawingView(context: Context) : View(context) {
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasDrawing = mode == Mode.DRAW
                 mode = Mode.NONE
                 drawPointerId = -1
+                if (wasDrawing) onChanged?.invoke()
             }
         }
         return true
