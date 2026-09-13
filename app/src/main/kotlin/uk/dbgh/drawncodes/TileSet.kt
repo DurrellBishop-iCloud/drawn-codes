@@ -155,6 +155,57 @@ object TileSet {
                 close()
             }, Path.Op.UNION)
         }
+
+        // concave fillets between adjacent arms, wherever a diagonal is
+        // involved — same radius as the orthogonal tiles' fillets, so
+        // inside 45° junctions get the same rounded language
+        val rin = h - v
+        val dirs = ArrayList<Float>(8)
+        if (key and GridModel.RIGHT != 0) dirs.add(0f)
+        if (key and GridModel.DR != 0) dirs.add(45f)
+        if (key and GridModel.DOWN != 0) dirs.add(90f)
+        if (key and GridModel.DL != 0) dirs.add(135f)
+        if (key and GridModel.LEFT != 0) dirs.add(180f)
+        if (key and GridModel.UL != 0) dirs.add(225f)
+        if (key and GridModel.UP != 0) dirs.add(270f)
+        if (key and GridModel.UR != 0) dirs.add(315f)
+        if (dirs.size >= 2) {
+            for (i in dirs.indices) {
+                val a1 = dirs[i]
+                val a2 = if (i + 1 < dirs.size) dirs[i + 1] else dirs[0] + 360f
+                val gap = a2 - a1
+                val diagonalPair = a1 % 90f != 0f || a2 % 90f != 0f
+                if (gap == 135f || (gap == 90f && diagonalPair)) {
+                    p.op(sectorFillet(a1, gap, v, rin), Path.Op.UNION)
+                }
+            }
+        }
         return p
+    }
+
+    /**
+     * Filler for the sector between two arms `gap` degrees apart: bounded
+     * by the arms' edges and a concave arc of radius `rf` tangent to both.
+     */
+    private fun sectorFillet(a1: Float, gap: Float, v: Float, rf: Float): Path {
+        val half = Math.toRadians(gap / 2.0)
+        val bis = Math.toRadians((a1 + gap / 2f).toDouble())
+        val pDist = (v / kotlin.math.sin(half)).toFloat()      // sharp corner point
+        val cDist = ((v + rf) / kotlin.math.sin(half)).toFloat()  // arc centre
+        val cx = (cDist * kotlin.math.cos(bis)).toFloat()
+        val cy = (cDist * kotlin.math.sin(bis)).toFloat()
+        val n1 = Math.toRadians((a1 + 90f).toDouble())
+        val n2 = Math.toRadians((a1 + gap - 90f).toDouble())
+        val path = Path()
+        path.moveTo((pDist * kotlin.math.cos(bis)).toFloat(),
+                    (pDist * kotlin.math.sin(bis)).toFloat())
+        path.lineTo(cx - rf * kotlin.math.cos(n1).toFloat(),
+                    cy - rf * kotlin.math.sin(n1).toFloat())
+        path.arcTo(android.graphics.RectF(cx - rf, cy - rf, cx + rf, cy + rf),
+                   a1 - 90f, gap - 180f)
+        path.lineTo(cx - rf * kotlin.math.cos(n2).toFloat(),
+                    cy - rf * kotlin.math.sin(n2).toFloat())
+        path.close()
+        return path
     }
 }
