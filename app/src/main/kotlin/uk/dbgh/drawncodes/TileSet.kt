@@ -127,10 +127,22 @@ object TileSet {
         val v = s * STROKE_FRACTION / 2f
         val dd = s * DIAMOND_FRACTION
 
+        // A diagonal-carrying cell is built from straight arms so the
+        // sector fillets always meet straight edges (the pre-built corner
+        // tile is an annulus, whose curved boundary left fillet slivers
+        // poking out as spikes). Adjacent orthogonal pairs still get the
+        // annulus unioned in for the rounded outer corner.
         val p = Path()
-        val base = paths[ortho]
-        if (base != null) p.addPath(base)
-        else p.addCircle(0f, 0f, v, Path.Direction.CW)   // round hub for diagonal-only cells
+        p.addCircle(0f, 0f, v, Path.Direction.CW)   // round hub
+        if (ortho and GridModel.UP != 0) p.addRect(-v, -h, v, 0f, Path.Direction.CW)
+        if (ortho and GridModel.DOWN != 0) p.addRect(-v, 0f, v, h, Path.Direction.CW)
+        if (ortho and GridModel.RIGHT != 0) p.addRect(0f, -v, h, v, Path.Direction.CW)
+        if (ortho and GridModel.LEFT != 0) p.addRect(-h, -v, 0f, v, Path.Direction.CW)
+        for (pair in intArrayOf(
+                GridModel.UP or GridModel.RIGHT, GridModel.RIGHT or GridModel.DOWN,
+                GridModel.DOWN or GridModel.LEFT, GridModel.LEFT or GridModel.UP)) {
+            if (ortho and pair == pair) p.op(paths[pair]!!, Path.Op.UNION)
+        }
 
         // n = perpendicular half-width offset of a 45° bar, per axis
         val n = v / kotlin.math.sqrt(2f)
@@ -174,9 +186,10 @@ object TileSet {
                 val a1 = dirs[i]
                 val a2 = if (i + 1 < dirs.size) dirs[i + 1] else dirs[0] + 360f
                 val gap = a2 - a1
-                val diagonalPair = a1 % 90f != 0f || a2 % 90f != 0f
-                if (gap == 135f || (gap == 90f && diagonalPair)) {
-                    p.op(sectorFillet(a1, gap, v, rin), Path.Op.UNION)
+                if (gap == 135f || gap == 90f) {
+                    // radius a hair past tangent so Path.op never leaves
+                    // degenerate slivers at the touch points
+                    p.op(sectorFillet(a1, gap, v, rin + 0.75f), Path.Op.UNION)
                 }
             }
         }

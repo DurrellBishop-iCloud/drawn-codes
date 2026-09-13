@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.4.2
+// Drawn Codes v0.4.3
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // connection bits per cell (up=1000, right=0100, down=0010, left=0001).
 // One finger draws, two fingers pinch-zoom and pan; the canvas is
@@ -18,7 +18,7 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.4.2"
+const val APP_VERSION = "0.4.3"
 
 class MainActivity : AppCompatActivity() {
 
