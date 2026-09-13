@@ -100,10 +100,13 @@ class DrawingView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         drawGuideGrid(canvas)
-        Renderer.render(canvas, model, currentFill(),
-            viewport.cellSize,
-            -viewport.originX * viewport.cellSize,
-            -viewport.originY * viewport.cellSize)
+        val radius = viewport.cellSize * InkSmooth.RADIUS_FRACTION
+        InkSmooth.draw(canvas, width, height, radius) { c ->
+            Renderer.render(c, model, currentFill(),
+                viewport.cellSize,
+                -viewport.originX * viewport.cellSize,
+                -viewport.originY * viewport.cellSize)
+        }
         canvas.drawText("v$APP_VERSION", 12f, height - 10f, hudPaint)
     }
 

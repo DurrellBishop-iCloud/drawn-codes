@@ -34,6 +34,7 @@ object Exporter {
         val canvas = Canvas(bmp)
         canvas.drawColor(Color.WHITE)
         Renderer.render(canvas, model, fill, px, -minC * px, -minR * px)
+        InkSmooth.smoothBitmap(bmp, (px * InkSmooth.RADIUS_FRACTION).toInt())
         return bmp
     }
 
