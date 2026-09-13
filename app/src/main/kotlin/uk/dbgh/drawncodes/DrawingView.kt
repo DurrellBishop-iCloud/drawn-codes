@@ -32,6 +32,18 @@ class DrawingView(context: Context) : View(context) {
     private var lastY = 0f
     private var drawPointerId = -1
 
+    // corner-diamond pass-through state: a stroke that enters the diamond
+    // zone on a grid corner and leaves into the diagonal cell reads as a
+    // 45° connection — the diamonds are what make angles recognisable
+    private var inCorner = false
+    private var cornerR = 0
+    private var cornerC = 0
+
+    companion object {
+        /** Corner diamond reach (|dx|+|dy| in cell units) for hit-testing. */
+        const val CORNER_ZONE = 0.38f
+    }
+
     // nav state
     private var navX = 0f
     private var navY = 0f
@@ -110,6 +122,7 @@ class DrawingView(context: Context) : View(context) {
                 model.pushUndo()
                 lastX = e.x; lastY = e.y
                 lastCol = colAt(e.x); lastRow = rowAt(e.y)
+                inCorner = false
                 if (erasing) model.erase(lastRow, lastCol) else model.touch(lastRow, lastCol)
                 invalidate()
             }
@@ -198,9 +211,40 @@ class DrawingView(context: Context) : View(context) {
         val steps = (dist / (viewport.cellSize / 4f)).toInt() + 1
         for (i in 1..steps) {
             val t = i / steps.toFloat()
-            visitCell(colAt(lastX + (x - lastX) * t), rowAt(lastY + (y - lastY) * t))
+            visitPoint(lastX + (x - lastX) * t, lastY + (y - lastY) * t)
         }
         lastX = x; lastY = y
+    }
+
+    private fun visitPoint(px: Float, py: Float) {
+        val wx = viewport.screenToCellX(px)
+        val wy = viewport.screenToCellY(py)
+        val c = floor(wx).toInt()
+        val r = floor(wy).toInt()
+
+        if (!erasing) {   // erasing works on whole cells, corners ignored
+            // nearest grid corner, in cell units
+            val kc = Math.round(wx).toInt()
+            val kr = Math.round(wy).toInt()
+            if (Math.abs(wx - kc) + Math.abs(wy - kr) <= CORNER_ZONE) {
+                if (!inCorner) { inCorner = true; cornerR = kr; cornerC = kc }
+                return   // hold position while inside the diamond
+            }
+            if (inCorner) {
+                inCorner = false
+                if (r != lastRow || c != lastCol) {
+                    val viaThisCorner =
+                        cornerR == maxOf(r, lastRow) && cornerC == maxOf(c, lastCol)
+                    if (viaThisCorner &&
+                        Math.abs(r - lastRow) == 1 && Math.abs(c - lastCol) == 1) {
+                        model.connectDiagonal(lastRow, lastCol, r, c)
+                        lastRow = r; lastCol = c
+                        return
+                    }
+                }
+            }
+        }
+        visitCell(c, r)
     }
 
     private fun visitCell(c: Int, r: Int) {

@@ -16,6 +16,14 @@ class GridModel {
         const val DOWN = 2
         const val LEFT = 1
         const val TOUCHED = 16
+        // 45° connections, through the corner diamonds
+        const val UR = 32
+        const val DR = 64
+        const val DL = 128
+        const val UL = 256
+        const val ORTHO_MASK = 15
+        const val DIAG_MASK = UR or DR or DL or UL
+        const val SHAPE_MASK = ORTHO_MASK or DIAG_MASK
 
         fun key(r: Int, c: Int): Long = (r.toLong() shl 32) or (c.toLong() and 0xffffffffL)
         fun keyRow(k: Long): Int = (k shr 32).toInt()
@@ -70,6 +78,19 @@ class GridModel {
         put(r1, c1, this[r1, c1] or pair.second or TOUCHED)
     }
 
+    /** Connect two diagonal neighbours (both get their facing corner bits). */
+    fun connectDiagonal(r0: Int, c0: Int, r1: Int, c1: Int) {
+        val pair = when {
+            r1 == r0 - 1 && c1 == c0 + 1 -> UR to DL
+            r1 == r0 + 1 && c1 == c0 + 1 -> DR to UL
+            r1 == r0 + 1 && c1 == c0 - 1 -> DL to UR
+            r1 == r0 - 1 && c1 == c0 - 1 -> UL to DR
+            else -> return
+        }
+        put(r0, c0, this[r0, c0] or pair.first or TOUCHED)
+        put(r1, c1, this[r1, c1] or pair.second or TOUCHED)
+    }
+
     /** Clear a cell and the facing bits of its neighbours. */
     fun erase(r: Int, c: Int) {
         put(r, c, 0)
@@ -77,6 +98,10 @@ class GridModel {
         put(r + 1, c, this[r + 1, c] and UP.inv())
         put(r, c - 1, this[r, c - 1] and RIGHT.inv())
         put(r, c + 1, this[r, c + 1] and LEFT.inv())
+        put(r - 1, c + 1, this[r - 1, c + 1] and DL.inv())
+        put(r + 1, c + 1, this[r + 1, c + 1] and UL.inv())
+        put(r + 1, c - 1, this[r + 1, c - 1] and UR.inv())
+        put(r - 1, c - 1, this[r - 1, c - 1] and DR.inv())
     }
 
     fun clear() {

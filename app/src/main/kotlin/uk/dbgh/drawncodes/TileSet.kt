@@ -18,9 +18,18 @@ object TileSet {
 
     const val REF = 128f
     const val STROKE_FRACTION = 0.5f
+    // Corner-diamond half-diagonal (along the axes) as a cell fraction.
+    // Flush with the 45° bar's edges (half-width v perpendicular →
+    // v·√2 = 0.354 along the axes), plus a hair to avoid seams — so
+    // diagonal strokes keep exactly the same visual weight as straight
+    // ones. The diamonds remain as touch/recognition zones.
+    const val DIAMOND_FRACTION = 0.36f
 
     val paths: Array<Path?> = arrayOfNulls(16)
     val dot: Path
+
+    /** Composed shapes (orthogonal tile + diagonal arms + corner diamonds). */
+    private val composed = HashMap<Int, Path?>()
 
     init {
         val s = REF
@@ -94,5 +103,58 @@ object TileSet {
         paths[u or d or l] = rotated(tee, 180f)
         paths[u or r or l] = rotated(tee, 270f)
         paths[u or r or d or l] = cross
+    }
+
+    /**
+     * Shape for a full cell code (orthogonal + diagonal bits, TOUCHED
+     * ignored): the orthogonal tile, plus a 45° bar to each connected
+     * corner and a solid diamond on that corner — the diamonds are the
+     * angle markers from Durrell's sketches, and a ring of alternating
+     * straight/diagonal segments reads as an octagon.
+     */
+    fun pathFor(code: Int): Path? {
+        val key = code and GridModel.SHAPE_MASK
+        return composed.getOrPut(key) { compose(key) }
+    }
+
+    private fun compose(key: Int): Path? {
+        val ortho = key and GridModel.ORTHO_MASK
+        val diag = key and GridModel.DIAG_MASK
+        if (diag == 0) return paths[ortho]
+
+        val s = REF
+        val h = s / 2f
+        val v = s * STROKE_FRACTION / 2f
+        val dd = s * DIAMOND_FRACTION
+
+        val p = Path()
+        val base = paths[ortho]
+        if (base != null) p.addPath(base)
+        else p.addCircle(0f, 0f, v, Path.Direction.CW)   // round hub for diagonal-only cells
+
+        // n = perpendicular half-width offset of a 45° bar, per axis
+        val n = v / kotlin.math.sqrt(2f)
+        for ((bit, sx, sy) in listOf(
+            Triple(GridModel.UR, 1f, -1f), Triple(GridModel.DR, 1f, 1f),
+            Triple(GridModel.DL, -1f, 1f), Triple(GridModel.UL, -1f, -1f))) {
+            if (key and bit == 0) continue
+            val cx = sx * h
+            val cy = sy * h
+            p.op(Path().apply {   // bar from the centre to the corner
+                moveTo(n * sy, -n * sx)   // offset by the perpendicular (sy, -sx)·n
+                lineTo(cx + n * sy, cy - n * sx)
+                lineTo(cx - n * sy, cy + n * sx)
+                lineTo(-n * sy, n * sx)
+                close()
+            }, Path.Op.UNION)
+            p.op(Path().apply {   // corner diamond
+                moveTo(cx - dd, cy)
+                lineTo(cx, cy - dd)
+                lineTo(cx + dd, cy)
+                lineTo(cx, cy + dd)
+                close()
+            }, Path.Op.UNION)
+        }
+        return p
     }
 }
