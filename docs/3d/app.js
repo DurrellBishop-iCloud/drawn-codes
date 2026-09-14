@@ -10,7 +10,7 @@ import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GridModel, computeFill } from '../engine.js?v=w022';
 import { traceSilhouette } from '../silhouette.js?v=w022';
 
-export const APP_VERSION = '3d0.2.1';
+export const APP_VERSION = '3d0.2.2';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -160,8 +160,14 @@ function rebuild() {
       depth: z, bevelEnabled: false,
     });
     geo.scale(mmPerCell, mmPerCell, 1);
+    // coincident walls between layers z-fight; bias each layer a step
+    // nearer than the one below so the upper always wins (render-only —
+    // exported geometry is untouched)
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: drawing.colors[li], roughness: 0.55, metalness: 0.05,
+      polygonOffset: true,
+      polygonOffsetFactor: -2 * (built + 1),
+      polygonOffsetUnits: -2 * (built + 1),
     }));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
