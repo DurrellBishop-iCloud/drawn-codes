@@ -15,6 +15,7 @@ object Store {
 
     private const val MAGIC_V1 = 0x44430001   // single layer
     private const val MAGIC_V2 = 0x44430002   // four layers + active index
+    private const val MAGIC_V3 = 0x44430003   // + per-layer colours
 
     private fun file(context: Context) = File(context.filesDir, "drawing.bin")
 
@@ -22,11 +23,12 @@ object Store {
         try {
             val tmp = File(context.filesDir, "drawing.tmp")
             DataOutputStream(tmp.outputStream().buffered()).use { out ->
-                out.writeInt(MAGIC_V2)
+                out.writeInt(MAGIC_V3)
                 out.writeFloat(view.viewport.cellSize)
                 out.writeFloat(view.viewport.originX)
                 out.writeFloat(view.viewport.originY)
                 out.writeInt(view.activeLayer)
+                for (color in view.layerColors) out.writeInt(color)
                 for (m in view.layers) {
                     var count = 0
                     m.forEach { _, _, _ -> count++ }
@@ -49,14 +51,17 @@ object Store {
         try {
             DataInputStream(f.inputStream().buffered()).use { input ->
                 val magic = input.readInt()
-                if (magic != MAGIC_V1 && magic != MAGIC_V2) return
+                if (magic != MAGIC_V1 && magic != MAGIC_V2 && magic != MAGIC_V3) return
                 val cellSize = input.readFloat()
                 val ox = input.readFloat()
                 val oy = input.readFloat()
-                if (magic == MAGIC_V2) {
+                if (magic != MAGIC_V1) {
                     view.activeLayer = input.readInt().coerceIn(0, DrawingView.LAYER_COUNT - 1)
                 }
-                val nLayers = if (magic == MAGIC_V2) DrawingView.LAYER_COUNT else 1
+                if (magic == MAGIC_V3) {
+                    for (i in 0 until DrawingView.LAYER_COUNT) view.layerColors[i] = input.readInt()
+                }
+                val nLayers = if (magic == MAGIC_V1) 1 else DrawingView.LAYER_COUNT
                 for (i in 0 until nLayers) {
                     val count = input.readInt()
                     val cells = HashMap<Long, Int>(count * 2)

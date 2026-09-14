@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.9.0
+// Drawn Codes v0.9.1
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.9.0"
+const val APP_VERSION = "0.9.1"
 
 class MainActivity : AppCompatActivity() {
 
@@ -73,10 +73,19 @@ class MainActivity : AppCompatActivity() {
 
         chip("UNDO", { false }) { drawingView.undo() }
 
+        // palette row (hidden until the palette button is tapped):
+        // picking a swatch recolours the active layer's dot
+        val paletteRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(8), dp(6), dp(8), 0)
+            visibility = android.view.View.GONE
+        }
+
         // four colour dots — each one is a layer
         val dots = ArrayList<Pair<android.view.View, android.graphics.drawable.GradientDrawable>>()
         fun restyleDots() {
             for ((idx, pair) in dots.withIndex()) {
+                pair.second.setColor(drawingView.layerColors[idx])
                 pair.second.setStroke(
                     if (drawingView.activeLayer == idx) dp(3) else dp(1),
                     if (drawingView.activeLayer == idx) Color.rgb(60, 60, 60)
@@ -86,13 +95,14 @@ class MainActivity : AppCompatActivity() {
         for (i in 0 until DrawingView.LAYER_COUNT) {
             val d = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(DrawingView.LAYER_COLORS[i])
+                setColor(drawingView.layerColors[i])
             }
             val dot = android.view.View(this).apply {
                 background = d
                 setOnClickListener {
                     drawingView.activeLayer = i
                     restyleDots()
+                    Store.save(this@MainActivity, drawingView)
                 }
             }
             dots.add(dot to d)
@@ -101,6 +111,39 @@ class MainActivity : AppCompatActivity() {
             })
         }
         restyleDots()
+
+        val swatches = intArrayOf(
+            0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0xFF9E9E9E.toInt(),
+            0xFFE0362C.toInt(), 0xFFF4701B.toInt(), 0xFFF2A900.toInt(),
+            0xFF2E9E44.toInt(), 0xFF13A8A0.toInt(), 0xFF1D6FE0.toInt(),
+            0xFF7B3FF2.toInt(), 0xFFEE5FA7.toInt(), 0xFF8D5524.toInt())
+        for (color in swatches) {
+            val sd = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(color)
+                setStroke(dp(1), Color.argb(70, 0, 0, 0))
+            }
+            val sw = android.view.View(this).apply {
+                background = sd
+                setOnClickListener {
+                    drawingView.layerColors[drawingView.activeLayer] = color
+                    restyleDots()
+                    drawingView.invalidate()
+                    paletteRow.visibility = android.view.View.GONE
+                    Store.save(this@MainActivity, drawingView)
+                }
+            }
+            paletteRow.addView(sw, LinearLayout.LayoutParams(dp(24), dp(24)).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            })
+        }
+
+        // one more chip: opens the palette for the current dot
+        chip("＋", { paletteRow.visibility == android.view.View.VISIBLE }) {
+            paletteRow.visibility =
+                if (paletteRow.visibility == android.view.View.VISIBLE)
+                    android.view.View.GONE else android.view.View.VISIBLE
+        }
 
         chipRow.addView(android.view.View(this),
             LinearLayout.LayoutParams(0, 1, 1f))   // spacer
@@ -111,7 +154,14 @@ class MainActivity : AppCompatActivity() {
             drawingView.invalidate()
         }
 
-        canvasFrame.addView(chipRow, FrameLayout.LayoutParams(
+        val topOverlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(chipRow, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            addView(paletteRow, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        canvasFrame.addView(topOverlay, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.TOP))
 

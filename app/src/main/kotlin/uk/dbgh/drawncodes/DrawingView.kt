@@ -58,12 +58,15 @@ class DrawingView(context: Context) : View(context) {
         const val CORNER_ZONE = 0.38f
 
         const val LAYER_COUNT = 4
-        val LAYER_COLORS = intArrayOf(
+        val DEFAULT_COLORS = intArrayOf(
             0xFF000000.toInt(),   // black
             0xFFE0362C.toInt(),   // red
             0xFF1D6FE0.toInt(),   // blue
             0xFFF2A900.toInt())   // amber
     }
+
+    /** Current colour of each layer (editable via the palette). */
+    val layerColors = DEFAULT_COLORS.copyOf()
 
     // nav state
     private var navX = 0f
@@ -120,12 +123,12 @@ class DrawingView(context: Context) : View(context) {
         val radius = viewport.cellSize * InkSmooth.RADIUS_FRACTION
         for (i in 0 until LAYER_COUNT) {
             if (layers[i].isEmpty) continue
-            InkSmooth.draw(canvas, width, height, radius, LAYER_COLORS[i], i) { c ->
+            InkSmooth.draw(canvas, width, height, radius, layerColors[i], i) { c ->
                 Renderer.render(c, layers[i], fillFor(i),
                     viewport.cellSize,
                     -viewport.originX * viewport.cellSize,
                     -viewport.originY * viewport.cellSize,
-                    LAYER_COLORS[i])
+                    layerColors[i])
             }
         }
         canvas.drawText("v$APP_VERSION", 12f, height - 10f, hudPaint)

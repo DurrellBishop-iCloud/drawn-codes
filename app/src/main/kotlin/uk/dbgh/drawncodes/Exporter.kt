@@ -51,7 +51,7 @@ object Exporter {
             Renderer.render(canvas, m, view.fillFor(i), px, -minC * px, -minR * px, Color.BLACK)
             InkSmooth.smoothMask(mask, (px * InkSmooth.RADIUS_FRACTION).toInt())
             mask.getPixels(maskPx, 0, w, 0, 0, w, h)
-            val color = DrawingView.LAYER_COLORS[i]
+            val color = view.layerColors[i]
             for (j in maskPx.indices) {
                 if (maskPx[j] and 0xFF < 128) outPx[j] = color
             }
