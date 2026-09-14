@@ -21,7 +21,7 @@ import android.os.Build
 object InkSmooth {
 
     /** Smoothing radius as a fraction of a cell. */
-    const val RADIUS_FRACTION = 0.07f
+    const val RADIUS_FRACTION = 0.09f
 
     private const val THRESHOLD_AGSL = """
         uniform shader inp;

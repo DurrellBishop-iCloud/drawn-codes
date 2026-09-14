@@ -122,6 +122,14 @@ object TileSet {
         val diag = key and GridModel.DIAG_MASK
         if (diag == 0) return paths[ortho]
 
+        // A cell with exactly two connections 90° or 135° apart is a pure
+        // turn: draw it as an arc band tangent to both arms — the
+        // generalisation of the orthogonal corner annulus — so turns into
+        // diagonals get the same sweeping outer curve.
+        if (Integer.bitCount(key) == 2) {
+            turnBand(key)?.let { return it }
+        }
+
         val s = REF
         val h = s / 2f
         val v = s * STROKE_FRACTION / 2f
@@ -198,6 +206,81 @@ object TileSet {
                     // junction ((v+rf)·cot22.5° must stay within one cell).
                     p.op(sectorFillet(a1, gap, v, s * 0.15f), Path.Op.UNION)
                 }
+            }
+        }
+        return p
+    }
+
+    private val DIR_ANGLES = listOf(
+        GridModel.RIGHT to 0f, GridModel.DR to 45f, GridModel.DOWN to 90f,
+        GridModel.DL to 135f, GridModel.LEFT to 180f, GridModel.UL to 225f,
+        GridModel.UP to 270f, GridModel.UR to 315f)
+
+    /**
+     * Two-connection turn as an arc band: centreline arc of radius h
+     * tangent to both arm centrelines (for an orthogonal pair this IS the
+     * corner annulus), plus trimmed arms out to the cell boundary and the
+     * diamond on any diagonal corner. Returns null unless the two
+     * connections are 90° or 135° apart (45° is a hairpin, 180° straight).
+     */
+    private fun turnBand(key: Int): Path? {
+        val pair = DIR_ANGLES.filter { key and it.first != 0 }
+        if (pair.size != 2) return null
+        var a1 = pair[0].second
+        var a2 = pair[1].second
+        if (a2 < a1) { val t = a1; a1 = a2; a2 = t }
+        var gap = a2 - a1
+        if (gap > 180f) { val t = a1; a1 = a2; a2 = t + 360f; gap = 360f - gap }
+        if (gap != 90f && gap != 135f) return null
+
+        val s = REF
+        val h = s / 2f
+        val v = s * STROKE_FRACTION / 2f
+        val half = Math.toRadians(gap / 2.0)
+        val cDist = (h / kotlin.math.sin(half)).toFloat()
+        val bisDeg = a1 + gap / 2f
+        val bis = Math.toRadians(bisDeg.toDouble())
+        val cx = (cDist * kotlin.math.cos(bis)).toFloat()
+        val cy = (cDist * kotlin.math.sin(bis)).toFloat()
+        val foot = (h / kotlin.math.tan(half)).toFloat()
+        val span = 180f - gap
+        val rOut = h + v
+        val rIn = kotlin.math.max(h - v, 0.5f)
+        val startDeg = bisDeg + 180f - span / 2f
+
+        val p = Path()
+        p.arcTo(android.graphics.RectF(cx - rOut, cy - rOut, cx + rOut, cy + rOut),
+                startDeg, span)
+        p.arcTo(android.graphics.RectF(cx - rIn, cy - rIn, cx + rIn, cy + rIn),
+                startDeg + span, -span)
+        p.close()
+
+        val dd = s * DIAMOND_FRACTION
+        for ((bit, ang) in pair) {
+            val isDiag = bit and GridModel.DIAG_MASK != 0
+            val len = if (isDiag) h * kotlin.math.sqrt(2f) else h
+            val ar = Math.toRadians(ang.toDouble())
+            val dx = kotlin.math.cos(ar).toFloat()
+            val dy = kotlin.math.sin(ar).toFloat()
+            val px = -dy * v
+            val py = dx * v
+            if (len > foot + 0.01f) {
+                p.op(Path().apply {   // arm from the band's tangent foot outward
+                    moveTo(dx * foot + px, dy * foot + py)
+                    lineTo(dx * len + px, dy * len + py)
+                    lineTo(dx * len - px, dy * len - py)
+                    lineTo(dx * foot - px, dy * foot - py)
+                    close()
+                }, Path.Op.UNION)
+            }
+            if (isDiag) {
+                val ccx = dx * len
+                val ccy = dy * len
+                p.op(Path().apply {   // corner diamond
+                    moveTo(ccx - dd, ccy); lineTo(ccx, ccy - dd)
+                    lineTo(ccx + dd, ccy); lineTo(ccx, ccy + dd)
+                    close()
+                }, Path.Op.UNION)
             }
         }
         return p
