@@ -1,0 +1,241 @@
+// Drawn Codes 3D — real printable solids derived from the drawing model.
+// The drawing (shared browser storage with ../) is the CAD source: each
+// layer's silhouette is traced at high precision, sorted into outlines
+// and holes, extruded to a real thickness in millimetres, and stacked in
+// layer order. The viewer renders the exact meshes the STL export writes.
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { GridModel, computeFill } from '../engine.js?v=w021';
+import { traceSilhouette } from '../silhouette.js?v=w021';
+
+export const APP_VERSION = '3d0.1.0';
+const LAYER_COUNT = 4;
+const TRACE_SAMPLES = 48;    // export-grade precision
+
+// ---- state -----------------------------------------------------------
+let mmPerCell = 4;
+const thickness = [2, 2, 2, 2];   // mm per layer
+let drawing = null;               // { layers[GridModel], colors, order, fillOn }
+const solids = [];                // per layer index: THREE.Mesh or null
+
+// ---- three scene -----------------------------------------------------
+const viewEl = document.getElementById('view');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf4f4f4);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+viewEl.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+sun.position.set(60, 40, 120);
+scene.add(sun);
+const sun2 = new THREE.DirectionalLight(0xffffff, 0.5);
+sun2.position.set(-80, -60, 40);
+scene.add(sun2);
+
+const grid = new THREE.GridHelper(200, 20, 0xbbbbbb, 0xdddddd);
+grid.rotation.x = Math.PI / 2;   // grid in the XY (build-plate) plane, Z up
+scene.add(grid);
+
+const partGroup = new THREE.Group();
+scene.add(partGroup);
+
+function resize() {
+  const w = viewEl.clientWidth, h = viewEl.clientHeight;
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// ---- drawing → solids ------------------------------------------------
+function loadDrawing() {
+  let d;
+  try { d = JSON.parse(localStorage.getItem('drawncodes')); } catch (_) {}
+  if (!d || !d.layers) { status('No drawing found — draw something first.'); return null; }
+  const layers = [];
+  for (let i = 0; i < LAYER_COUNT; i++) {
+    const m = new GridModel();
+    m.restore(d.layers[i] || []);
+    layers.push(m);
+  }
+  return {
+    layers,
+    colors: d.colors || ['#000', '#e0362c', '#1d6fe0', '#f2a900'],
+    order: (d.order && new Set(d.order).size === LAYER_COUNT) ? d.order : [0, 1, 2, 3],
+    fillOn: d.fill || [true, true, true, true],
+  };
+}
+
+function signedArea(loop) {
+  let a = 0;
+  for (let i = 0; i < loop.length; i++) {
+    const [x1, y1] = loop[i], [x2, y2] = loop[(i + 1) % loop.length];
+    a += x1 * y2 - x2 * y1;
+  }
+  return a / 2;
+}
+
+function pointInLoop(loop, px, py) {
+  let inside = false;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const [xi, yi] = loop[i], [xj, yj] = loop[j];
+    if ((yi > py) !== (yj > py) &&
+        px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Sort traced loops into outer shapes with their holes (nesting-aware). */
+function buildShapes(loops) {
+  const info = loops.map((pts) => ({ pts, area: Math.abs(signedArea(pts)) }));
+  for (const a of info) {
+    a.parents = info.filter((b) => b !== a &&
+      b.area > a.area && pointInLoop(b.pts, a.pts[0][0], a.pts[0][1]));
+    a.depth = a.parents.length;
+    a.parent = a.parents.sort((p, q) => p.area - q.area)[0] || null;
+  }
+  const shapes = [];
+  for (const a of info) {
+    if (a.depth % 2 === 0) {
+      a.shape = new THREE.Shape(a.pts.map(([x, y]) => new THREE.Vector2(x, -y)));
+      shapes.push(a);
+    }
+  }
+  for (const a of info) {
+    if (a.depth % 2 === 1 && a.parent && a.parent.shape) {
+      a.parent.shape.holes.push(
+        new THREE.Path(a.pts.map(([x, y]) => new THREE.Vector2(x, -y))));
+    }
+  }
+  return shapes.map((s) => s.shape);
+}
+
+function rebuild() {
+  partGroup.clear();
+  solids.length = 0;
+  if (!drawing) return;
+  let z = 0;
+  let built = 0;
+  for (const li of drawing.order) {
+    const m = drawing.layers[li];
+    solids[li] = null;
+    if (m.isEmpty) continue;
+    const fill = drawing.fillOn[li] ? computeFill(m) : null;
+    const sil = traceSilhouette(m, fill, TRACE_SAMPLES);
+    if (!sil || !sil.loops.length) continue;
+    const shapes = buildShapes(sil.loops);
+    if (!shapes.length) continue;
+    const geo = new THREE.ExtrudeGeometry(shapes, {
+      depth: thickness[li], bevelEnabled: false,
+    });
+    geo.scale(mmPerCell, mmPerCell, 1);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: drawing.colors[li], roughness: 0.55, metalness: 0.05,
+    }));
+    mesh.position.z = z;
+    mesh.userData.layer = li;
+    partGroup.add(mesh);
+    solids[li] = mesh;
+    z += thickness[li];
+    built++;
+  }
+  fitCamera();
+  status(built ? `${built} layer${built > 1 ? 's' : ''} · ` +
+    `${Math.round(z)} mm tall stack — what you see is the mesh you print.`
+    : 'Drawing is empty.');
+}
+
+function fitCamera() {
+  const box = new THREE.Box3().setFromObject(partGroup);
+  if (box.isEmpty()) { camera.position.set(60, -80, 80); controls.target.set(0, 0, 0); return; }
+  const c = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3()).length() || 50;
+  grid.position.set(c.x, c.y, box.min.z - 0.01);
+  camera.position.set(c.x + size * 0.6, c.y - size * 0.9, box.max.z + size * 0.8);
+  camera.up.set(0, 0, 1);
+  controls.target.copy(c);
+  controls.update();
+}
+
+// ---- export ----------------------------------------------------------
+const exporter = new STLExporter();
+
+function download(name, buffer) {
+  const a = document.createElement('a');
+  a.download = name;
+  a.href = URL.createObjectURL(new Blob([buffer], { type: 'model/stl' }));
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function exportAll() {
+  if (!partGroup.children.length) { status('Nothing to export.'); return; }
+  scene.updateMatrixWorld(true);
+  const data = exporter.parse(partGroup, { binary: true });
+  download('drawncodes.stl', data.buffer ?? data);
+  status(`drawncodes.stl — ${(data.byteLength / 1024).toFixed(0)} KB`);
+}
+
+function exportLayer(li) {
+  const mesh = solids[li];
+  if (!mesh) { status('Layer is empty.'); return; }
+  scene.updateMatrixWorld(true);
+  const data = exporter.parse(mesh, { binary: true });
+  download(`drawncodes-layer${li + 1}.stl`, data.buffer ?? data);
+  status(`layer ${li + 1} STL — ${(data.byteLength / 1024).toFixed(0)} KB`);
+}
+
+// ---- ui --------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+function status(t) { $('status').textContent = t; }
+
+function rebuildLayerPanel() {
+  const box = $('layers');
+  box.innerHTML = '';
+  if (!drawing) return;
+  for (const li of [...drawing.order].reverse()) {   // top of stack first
+    const row = document.createElement('div');
+    row.className = 'layer';
+    const sw = document.createElement('div');
+    sw.className = 'swatch';
+    sw.style.background = drawing.colors[li];
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = '0.4'; inp.step = '0.2';
+    inp.value = thickness[li];
+    inp.oninput = () => { thickness[li] = +inp.value || 1; rebuild(); };
+    const lab = document.createElement('span');
+    lab.textContent = 'mm';
+    lab.style.color = '#888';
+    const ex = document.createElement('button');
+    ex.textContent = 'STL';
+    ex.onclick = () => exportLayer(li);
+    row.append(sw, inp, lab, ex);
+    if (drawing.layers[li].isEmpty) row.style.opacity = 0.35;
+    box.appendChild(row);
+  }
+}
+
+$('mmcell').oninput = () => { mmPerCell = +$('mmcell').value || 4; rebuild(); };
+$('reload').onclick = () => { drawing = loadDrawing(); rebuildLayerPanel(); rebuild(); };
+$('stl').onclick = exportAll;
+
+// ---- boot ------------------------------------------------------------
+$('ver').textContent = APP_VERSION;
+drawing = loadDrawing();
+rebuildLayerPanel();
+resize();
+rebuild();
+animate();
