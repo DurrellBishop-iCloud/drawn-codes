@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.9.1
+// Drawn Codes v0.9.2
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.9.1"
+const val APP_VERSION = "0.9.2"
 
 class MainActivity : AppCompatActivity() {
 
@@ -73,11 +73,14 @@ class MainActivity : AppCompatActivity() {
 
         chip("UNDO", { false }) { drawingView.undo() }
 
-        // palette row (hidden until the palette button is tapped):
-        // picking a swatch recolours the active layer's dot
-        val paletteRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(8), dp(6), dp(8), 0)
+        // colour picker panel (hidden until the ＋ chip is tapped):
+        // adjusts the active layer's colour live
+        val picker = ColorPickerView(this)
+        val pickerPanel = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(235, 250, 250, 250))
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            addView(picker, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             visibility = android.view.View.GONE
         }
 
@@ -102,6 +105,9 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener {
                     drawingView.activeLayer = i
                     restyleDots()
+                    if (pickerPanel.visibility == android.view.View.VISIBLE) {
+                        picker.setColor(drawingView.layerColors[i])
+                    }
                     Store.save(this@MainActivity, drawingView)
                 }
             }
@@ -112,37 +118,21 @@ class MainActivity : AppCompatActivity() {
         }
         restyleDots()
 
-        val swatches = intArrayOf(
-            0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0xFF9E9E9E.toInt(),
-            0xFFE0362C.toInt(), 0xFFF4701B.toInt(), 0xFFF2A900.toInt(),
-            0xFF2E9E44.toInt(), 0xFF13A8A0.toInt(), 0xFF1D6FE0.toInt(),
-            0xFF7B3FF2.toInt(), 0xFFEE5FA7.toInt(), 0xFF8D5524.toInt())
-        for (color in swatches) {
-            val sd = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(color)
-                setStroke(dp(1), Color.argb(70, 0, 0, 0))
-            }
-            val sw = android.view.View(this).apply {
-                background = sd
-                setOnClickListener {
-                    drawingView.layerColors[drawingView.activeLayer] = color
-                    restyleDots()
-                    drawingView.invalidate()
-                    paletteRow.visibility = android.view.View.GONE
-                    Store.save(this@MainActivity, drawingView)
-                }
-            }
-            paletteRow.addView(sw, LinearLayout.LayoutParams(dp(24), dp(24)).apply {
-                setMargins(dp(3), 0, dp(3), 0)
-            })
+        picker.onColorChanged = { color ->
+            drawingView.layerColors[drawingView.activeLayer] = color
+            restyleDots()
+            drawingView.invalidate()
         }
+        picker.onColorCommitted = { Store.save(this, drawingView) }
 
-        // one more chip: opens the palette for the current dot
-        chip("＋", { paletteRow.visibility == android.view.View.VISIBLE }) {
-            paletteRow.visibility =
-                if (paletteRow.visibility == android.view.View.VISIBLE)
-                    android.view.View.GONE else android.view.View.VISIBLE
+        // one more chip: opens the colour picker for the current dot
+        chip("＋", { pickerPanel.visibility == android.view.View.VISIBLE }) {
+            if (pickerPanel.visibility == android.view.View.VISIBLE) {
+                pickerPanel.visibility = android.view.View.GONE
+            } else {
+                picker.setColor(drawingView.layerColors[drawingView.activeLayer])
+                pickerPanel.visibility = android.view.View.VISIBLE
+            }
         }
 
         chipRow.addView(android.view.View(this),
@@ -158,8 +148,10 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             addView(chipRow, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            addView(paletteRow, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            addView(pickerPanel, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(200)).apply {
+                setMargins(dp(8), dp(6), dp(8), 0)
+            })
         }
         canvasFrame.addView(topOverlay, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
