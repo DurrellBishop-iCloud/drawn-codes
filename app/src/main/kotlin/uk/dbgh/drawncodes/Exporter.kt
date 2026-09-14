@@ -43,7 +43,7 @@ object Exporter {
 
         val mask = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val maskPx = IntArray(w * h)
-        for (i in 0 until DrawingView.LAYER_COUNT) {
+        for (i in view.layerOrder) {
             val m = view.layers[i]
             if (m.isEmpty) continue
             mask.eraseColor(Color.WHITE)

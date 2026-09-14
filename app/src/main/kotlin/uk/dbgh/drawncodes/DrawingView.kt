@@ -75,6 +75,9 @@ class DrawingView(context: Context) : View(context) {
     /** Current colour of each layer (editable via the palette). */
     val layerColors = DEFAULT_COLORS.copyOf()
 
+    /** Render order, bottom to top — reordered by dragging the dots. */
+    val layerOrder = intArrayOf(0, 1, 2, 3)
+
     // nav state
     private var navX = 0f
     private var navY = 0f
@@ -128,7 +131,7 @@ class DrawingView(context: Context) : View(context) {
         super.onDraw(canvas)
         drawGuideGrid(canvas)
         val radius = viewport.cellSize * InkSmooth.RADIUS_FRACTION
-        for (i in 0 until LAYER_COUNT) {
+        for (i in layerOrder) {
             if (layers[i].isEmpty) continue
             InkSmooth.draw(canvas, width, height, radius, layerColors[i], i) { c ->
                 Renderer.render(c, layers[i], fillFor(i),

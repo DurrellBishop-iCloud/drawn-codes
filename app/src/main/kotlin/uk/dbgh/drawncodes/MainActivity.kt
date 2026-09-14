@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.10.0
+// Drawn Codes v0.11.0
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.10.0"
+const val APP_VERSION = "0.11.0"
 
 class MainActivity : AppCompatActivity() {
 
@@ -84,38 +84,83 @@ class MainActivity : AppCompatActivity() {
             visibility = android.view.View.GONE
         }
 
-        // four colour dots — each one is a layer
-        val dots = ArrayList<Pair<android.view.View, android.graphics.drawable.GradientDrawable>>()
-        fun restyleDots() {
-            for ((idx, pair) in dots.withIndex()) {
-                pair.second.setColor(drawingView.layerColors[idx])
-                pair.second.setStroke(
-                    if (drawingView.activeLayer == idx) dp(3) else dp(1),
-                    if (drawingView.activeLayer == idx) Color.rgb(60, 60, 60)
-                    else Color.argb(70, 0, 0, 0))
-            }
-        }
-        for (i in 0 until DrawingView.LAYER_COUNT) {
-            val d = android.graphics.drawable.GradientDrawable().apply {
+        // four colour dots, stacked bottom-right — the top dot renders on
+        // top; tap selects a layer, drag up/down reshuffles the stacking
+        val dotDrawables = Array(DrawingView.LAYER_COUNT) { i ->
+            android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(drawingView.layerColors[i])
             }
-            val dot = android.view.View(this).apply {
-                background = d
-                setOnClickListener {
-                    drawingView.activeLayer = i
-                    restyleDots()
-                    if (pickerPanel.visibility == android.view.View.VISIBLE) {
-                        picker.setColor(drawingView.layerColors[i])
+        }
+        fun restyleDots() {
+            for (i in 0 until DrawingView.LAYER_COUNT) {
+                dotDrawables[i].setColor(drawingView.layerColors[i])
+                dotDrawables[i].setStroke(
+                    if (drawingView.activeLayer == i) dp(3) else dp(1),
+                    if (drawingView.activeLayer == i) Color.rgb(60, 60, 60)
+                    else Color.argb(70, 0, 0, 0))
+            }
+        }
+        val dotCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val slotH = dp(42).toFloat()
+        lateinit var rebuildDots: () -> Unit
+        val dotViews = Array(DrawingView.LAYER_COUNT) { i ->
+            android.view.View(this).apply {
+                background = dotDrawables[i]
+                var downRawY = 0f
+                var dragging = false
+                setOnTouchListener { v, e ->
+                    when (e.actionMasked) {
+                        android.view.MotionEvent.ACTION_DOWN -> {
+                            downRawY = e.rawY; dragging = false; true
+                        }
+                        android.view.MotionEvent.ACTION_MOVE -> {
+                            val dy = e.rawY - downRawY
+                            if (!dragging && Math.abs(dy) > dp(6)) dragging = true
+                            if (dragging) v.translationY = dy
+                            true
+                        }
+                        android.view.MotionEvent.ACTION_UP,
+                        android.view.MotionEvent.ACTION_CANCEL -> {
+                            if (!dragging) {
+                                drawingView.activeLayer = i
+                                restyleDots()
+                                if (pickerPanel.visibility == android.view.View.VISIBLE) {
+                                    picker.setColor(drawingView.layerColors[i])
+                                }
+                            } else {
+                                val slots = Math.round(v.translationY / slotH)
+                                v.translationY = 0f
+                                if (slots != 0) {
+                                    val display = drawingView.layerOrder.reversed().toMutableList()
+                                    val pos = display.indexOf(i)
+                                    val newPos = (pos + slots).coerceIn(0, display.size - 1)
+                                    display.removeAt(pos)
+                                    display.add(newPos, i)
+                                    for (k in display.indices) {
+                                        drawingView.layerOrder[display.size - 1 - k] = display[k]
+                                    }
+                                    rebuildDots()
+                                    drawingView.invalidate()
+                                }
+                            }
+                            Store.save(this@MainActivity, drawingView)
+                            true
+                        }
+                        else -> false
                     }
-                    Store.save(this@MainActivity, drawingView)
                 }
             }
-            dots.add(dot to d)
-            chipRow.addView(dot, LinearLayout.LayoutParams(dp(30), dp(30)).apply {
-                setMargins(dp(5), dp(2), dp(5), 0)
-            })
         }
+        rebuildDots = {
+            dotCol.removeAllViews()
+            for (li in drawingView.layerOrder.reversed()) {
+                dotCol.addView(dotViews[li], LinearLayout.LayoutParams(dp(34), dp(34)).apply {
+                    setMargins(0, dp(4), 0, dp(4))
+                })
+            }
+        }
+        rebuildDots()
         restyleDots()
 
         picker.onColorChanged = { color ->
@@ -156,6 +201,9 @@ class MainActivity : AppCompatActivity() {
         canvasFrame.addView(topOverlay, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.TOP))
+        canvasFrame.addView(dotCol, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(10), dp(12)) })
 
         root.addView(canvasFrame, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
