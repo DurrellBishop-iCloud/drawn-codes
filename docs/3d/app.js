@@ -9,9 +9,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GridModel, computeFill } from '../engine.js?v=w025';
 import { traceSilhouette } from '../silhouette.js?v=w025';
-import { make3MF } from './threemf.js?v=3d040';
+import { make3MF } from './threemf.js?v=3d041';
 
-export const APP_VERSION = '3d0.4.0';
+export const APP_VERSION = '3d0.4.1';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 

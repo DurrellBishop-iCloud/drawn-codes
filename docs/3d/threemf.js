@@ -106,8 +106,15 @@ export async function make3MF(parts, THREE) {
     objectsXml += `<object id="${oid}" type="model" pid="1" pindex="${k}">` +
       `<mesh><vertices>${verts.join('')}</vertices>` +
       `<triangles>${triXml}</triangles></mesh></object>`;
-    itemsXml += `<item objectid="${oid}"/>`;
+    itemsXml += `<component objectid="${oid}"/>`;
   });
+  // one assembly object holding every layer as a component: slicers
+  // treat it as a single object with parts and union the overlaps —
+  // separate build items would collide as independent objects
+  const asmId = parts.length + 2;
+  objectsXml += `<object id="${asmId}" type="model">` +
+    `<components>${itemsXml}</components></object>`;
+  itemsXml = `<item objectid="${asmId}"/>`;
 
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
