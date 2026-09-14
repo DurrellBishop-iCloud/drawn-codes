@@ -1,8 +1,8 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w020';
-import { traceSilhouette } from './silhouette.js?v=w020';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w021';
+import { traceSilhouette } from './silhouette.js?v=w021';
 
-export const APP_VERSION = 'w0.2.0';
+export const APP_VERSION = 'w0.2.1';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;
@@ -23,7 +23,8 @@ const MIN_CELL = 14, MAX_CELL = 400;
 
 const fillCache = Array.from({ length: LAYER_COUNT }, () => ({ v: -1, fill: null }));
 const inkCache = Array.from({ length: LAYER_COUNT }, () => ({ v: -1, ink: null }));
-const silCache = Array.from({ length: LAYER_COUNT }, () => ({ v: -1, show: null, sil: null }));
+const silCache = Array.from({ length: LAYER_COUNT },
+  () => ({ v: -1, show: null, S: 0, sil: null, pending: false }));
 
 const model = () => layers[activeLayer];
 
@@ -66,14 +67,38 @@ function inkFor(i) {
   if (c.v !== layers[i].version) { c.ink = buildInk(layers[i]); c.v = layers[i].version; }
   return c.ink;
 }
+// trace precision follows the zoom so magnified edges stay smooth,
+// bounded so huge drawings keep a sane raster size
+function desiredSamples(i) {
+  let S = Math.min(40, Math.max(12, Math.round(viewport.cellSize / 6)));
+  const b = layers[i].bounds();
+  if (b) {
+    const area = (b.maxC - b.minC + 4) * (b.maxR - b.minR + 4);
+    S = Math.min(S, Math.max(8, Math.floor(Math.sqrt(6e6 / area))));
+  }
+  return S;
+}
+
+// Silhouettes are traced OFF the interaction frame: a stale-resolution
+// silhouette keeps drawing while a sharper one computes; a stale-model
+// one is discarded (the raw renderer covers until the trace lands).
 function silFor(i) {
   const c = silCache[i];
-  if (c.v !== layers[i].version || c.show !== layerShowFill[i]) {
-    c.sil = traceSilhouette(layers[i], fillFor(i));
+  if (mode === 'draw' && i === activeLayer) return null;   // raw while drawing
+  const S = desiredSamples(i);
+  const fresh = c.v === layers[i].version && c.show === layerShowFill[i];
+  if (fresh && c.S === S) return c.sil;
+  // model edits retrace immediately; resolution catch-up waits for the
+  // interaction to pause (the timer is pushed back every frame)
+  clearTimeout(c.timer);
+  c.timer = setTimeout(() => {
+    c.sil = traceSilhouette(layers[i], fillFor(i), desiredSamples(i));
     c.v = layers[i].version;
     c.show = layerShowFill[i];
-  }
-  return c.sil;
+    c.S = desiredSamples(i);
+    draw();
+  }, fresh ? 200 : 0);
+  return fresh ? c.sil : null;   // model changed: raw until the new trace lands
 }
 
 function draw() {
@@ -416,18 +441,21 @@ function rebuildDots() {
     const d = document.createElement('div');
     d.className = 'dot' + (li === activeLayer ? ' active' : '');
     d.style.background = layerColors[li];
-    let startY = 0, dragging = false;
+    let startY = 0, dragging = false, pressed = false;
     d.addEventListener('pointerdown', (e) => {
       d.setPointerCapture(e.pointerId);
-      startY = e.clientY; dragging = false;
+      startY = e.clientY; dragging = false; pressed = true;
       e.stopPropagation();
     });
     d.addEventListener('pointermove', (e) => {
+      if (!pressed) return;   // hover must never drag
       const dy = e.clientY - startY;
       if (!dragging && Math.abs(dy) > 6) dragging = true;
       if (dragging) d.style.transform = `translateY(${dy}px)`;
     });
     d.addEventListener('pointerup', (e) => {
+      if (!pressed) return;
+      pressed = false;
       const dy = e.clientY - startY;
       d.style.transform = '';
       if (!dragging) {
@@ -452,7 +480,7 @@ function rebuildDots() {
     });
     d.addEventListener('pointercancel', () => {
       d.style.transform = '';
-      dragging = false;
+      dragging = false; pressed = false;
       rebuildDots();
     });
     d.addEventListener('lostpointercapture', () => { d.style.transform = ''; });

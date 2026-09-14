@@ -10,7 +10,7 @@
 // Slivers and staircase artifacts are unrepresentable: there is one
 // continuous field and one contour, not pieces with seams.
 
-import { computeFill, buildInk, STROKE } from './engine.js?v=w020';
+import { computeFill, buildInk, STROKE } from './engine.js?v=w021';
 
 export const BLUR_CELLS = 0.09;
 
@@ -55,7 +55,7 @@ export function traceSilhouette(model, fill, samplesPerCell = 16) {
   }
 
   // ---- marching squares at iso = 127.5 --------------------------------
-  const loops = marchingSquares(field, W, H, 127.5);
+  const loops = marchingSquares(field, W, H, 127.5).map(chaikin);
 
   const path = new Path2D();
   for (const loop of loops) {
@@ -69,6 +69,18 @@ export function traceSilhouette(model, fill, samplesPerCell = 16) {
   const cellLoops = loops.map((loop) =>
     loop.map(([px, py]) => [px / S + x0 - 0.5, py / S + y0 - 0.5]));
   return { loops: cellLoops, path };
+}
+
+/** One round of Chaikin corner-cutting: halves sampling facets. */
+function chaikin(loop) {
+  const out = [];
+  for (let i = 0; i < loop.length; i++) {
+    const [ax, ay] = loop[i];
+    const [bx, by] = loop[(i + 1) % loop.length];
+    out.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25]);
+    out.push([ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]);
+  }
+  return out;
 }
 
 function drawFillField(ctx, fill) {
