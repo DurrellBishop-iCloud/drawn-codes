@@ -30,6 +30,13 @@ class DrawingView(context: Context) : View(context) {
     var allow45 = true    // recognise 45° moves through corner diamonds
     var allow90 = true    // draw orthogonal connections
     var showFill = true   // fill enclosed areas
+    var snapping = true   // start-of-stroke offset to the nearest cell centre
+
+    // touch-down offset to the nearest cell centre (screen px): applied to
+    // the whole stroke, so pure finger MOTION determines the path and
+    // angles are easy to hit from any landing spot
+    private var snapX = 0f
+    private var snapY = 0f
 
     /** Called after anything worth persisting (stroke end, undo, clear). */
     var onChanged: (() -> Unit)? = null
@@ -161,8 +168,16 @@ class DrawingView(context: Context) : View(context) {
                 mode = Mode.DRAW
                 drawPointerId = e.getPointerId(0)
                 model.pushUndo()
-                lastX = e.x; lastY = e.y
-                lastCol = colAt(e.x); lastRow = rowAt(e.y)
+                if (snapping) {
+                    val wx = viewport.screenToCellX(e.x)
+                    val wy = viewport.screenToCellY(e.y)
+                    snapX = (floor(wx) + 0.5f - wx) * viewport.cellSize
+                    snapY = (floor(wy) + 0.5f - wy) * viewport.cellSize
+                } else {
+                    snapX = 0f; snapY = 0f
+                }
+                lastX = e.x + snapX; lastY = e.y + snapY
+                lastCol = colAt(lastX); lastRow = rowAt(lastY)
                 inCorner = false
                 if (erasing) model.erase(lastRow, lastCol) else model.touch(lastRow, lastCol)
                 invalidate()
@@ -184,9 +199,10 @@ class DrawingView(context: Context) : View(context) {
                     val idx = e.findPointerIndex(drawPointerId)
                     if (idx >= 0) {
                         for (i in 0 until e.historySize) {
-                            strokeTo(e.getHistoricalX(idx, i), e.getHistoricalY(idx, i))
+                            strokeTo(e.getHistoricalX(idx, i) + snapX,
+                                     e.getHistoricalY(idx, i) + snapY)
                         }
-                        strokeTo(e.getX(idx), e.getY(idx))
+                        strokeTo(e.getX(idx) + snapX, e.getY(idx) + snapY)
                         invalidate()
                     }
                 }
