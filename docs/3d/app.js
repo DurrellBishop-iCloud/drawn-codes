@@ -10,7 +10,7 @@ import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GridModel, computeFill } from '../engine.js?v=w023';
 import { traceSilhouette } from '../silhouette.js?v=w023';
 
-export const APP_VERSION = '3d0.3.0';
+export const APP_VERSION = '3d0.3.1';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -153,17 +153,24 @@ function buildShapes(loops) {
     a.depth = a.parents.length;
     a.parent = a.parents.sort((p, q) => p.area - q.area)[0] || null;
   }
+  // winding matters: the extruder derives wall normals from loop
+  // direction (and the STL inherits them) — outers must run CCW,
+  // holes CW, regardless of how the tracer happened to walk them
+  const toVec = (pts) => pts.map(([x, y]) => new THREE.Vector2(x, -y));
   const shapes = [];
   for (const a of info) {
     if (a.depth % 2 === 0) {
-      a.shape = new THREE.Shape(a.pts.map(([x, y]) => new THREE.Vector2(x, -y)));
+      let v = toVec(a.pts);
+      if (THREE.ShapeUtils.isClockWise(v)) v = v.reverse();
+      a.shape = new THREE.Shape(v);
       shapes.push(a);
     }
   }
   for (const a of info) {
     if (a.depth % 2 === 1 && a.parent && a.parent.shape) {
-      a.parent.shape.holes.push(
-        new THREE.Path(a.pts.map(([x, y]) => new THREE.Vector2(x, -y))));
+      let v = toVec(a.pts);
+      if (!THREE.ShapeUtils.isClockWise(v)) v = v.reverse();
+      a.parent.shape.holes.push(new THREE.Path(v));
     }
   }
   return shapes.map((s) => s.shape);
@@ -198,6 +205,7 @@ function rebuild() {
     geo.scale(mmPerCell, mmPerCell, 1);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: drawing.colors[li], roughness: 0.55, metalness: 0.05,
+      side: THREE.DoubleSide,
     }));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
