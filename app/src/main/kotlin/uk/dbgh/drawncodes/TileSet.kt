@@ -135,22 +135,15 @@ object TileSet {
         val v = s * STROKE_FRACTION / 2f
         val dd = s * DIAMOND_FRACTION
 
-        // A diagonal-carrying cell is built from straight arms so the
-        // sector fillets always meet straight edges (the pre-built corner
-        // tile is an annulus, whose curved boundary left fillet slivers
-        // poking out as spikes). Adjacent orthogonal pairs still get the
-        // annulus unioned in for the rounded outer corner.
+        // A diagonal-carrying junction builds on the proper orthogonal
+        // tile — its corner annulus keeps the sweeping outer curve that
+        // plain centre-to-edge arms would flatten (their straight edges
+        // poke outside the arc). Straight edges for the diagonal fillets
+        // are provided by half-arm strips added per filleted sector below.
         val p = Path()
-        p.addCircle(0f, 0f, v, Path.Direction.CW)   // round hub
-        if (ortho and GridModel.UP != 0) p.addRect(-v, -h, v, 0f, Path.Direction.CW)
-        if (ortho and GridModel.DOWN != 0) p.addRect(-v, 0f, v, h, Path.Direction.CW)
-        if (ortho and GridModel.RIGHT != 0) p.addRect(0f, -v, h, v, Path.Direction.CW)
-        if (ortho and GridModel.LEFT != 0) p.addRect(-h, -v, 0f, v, Path.Direction.CW)
-        for (pair in intArrayOf(
-                GridModel.UP or GridModel.RIGHT, GridModel.RIGHT or GridModel.DOWN,
-                GridModel.DOWN or GridModel.LEFT, GridModel.LEFT or GridModel.UP)) {
-            if (ortho and pair == pair) p.op(paths[pair]!!, Path.Op.UNION)
-        }
+        val base = paths[ortho]
+        if (base != null) p.addPath(base)
+        else p.addCircle(0f, 0f, v, Path.Direction.CW)   // hub for diagonal-only cells
 
         // n = perpendicular half-width offset of a 45° bar, per axis
         val n = v / kotlin.math.sqrt(2f)
@@ -176,39 +169,51 @@ object TileSet {
             }, Path.Op.UNION)
         }
 
-        // concave fillets between adjacent arms, wherever a diagonal is
-        // involved — same radius as the orthogonal tiles' fillets, so
-        // inside 45° junctions get the same rounded language
+        // concave fillets between adjacent arms, only for gaps that
+        // involve a diagonal (the base tile already fillets its own
+        // orthogonal junctions). Each filleted ortho arm also gets a
+        // half-arm strip on the sector side, so the fillet's straight
+        // edge sits against ink rather than the tile's curved boundary.
         val rin = h - v
-        val dirs = ArrayList<Float>(8)
-        if (key and GridModel.RIGHT != 0) dirs.add(0f)
-        if (key and GridModel.DR != 0) dirs.add(45f)
-        if (key and GridModel.DOWN != 0) dirs.add(90f)
-        if (key and GridModel.DL != 0) dirs.add(135f)
-        if (key and GridModel.LEFT != 0) dirs.add(180f)
-        if (key and GridModel.UL != 0) dirs.add(225f)
-        if (key and GridModel.UP != 0) dirs.add(270f)
-        if (key and GridModel.UR != 0) dirs.add(315f)
+        val dirs = DIR_ANGLES.filter { key and it.first != 0 }
         if (dirs.size >= 2) {
             for (i in dirs.indices) {
-                val a1 = dirs[i]
-                val a2 = if (i + 1 < dirs.size) dirs[i + 1] else dirs[0] + 360f
+                val (b1, angle1) = dirs[i]
+                val (b2, angle2raw) = dirs[(i + 1) % dirs.size]
+                val a1 = angle1
+                val a2 = if (i + 1 < dirs.size) angle2raw else angle2raw + 360f
                 val gap = a2 - a1
-                if (gap == 135f || gap == 90f) {
-                    // radius a hair past tangent so Path.op never leaves
-                    // degenerate slivers at the touch points
-                    p.op(sectorFillet(a1, gap, v, rin + 0.75f), Path.Op.UNION)
-                } else if (gap == 45f) {
-                    // narrow wedge between a straight and a diagonal arm:
-                    // its sharp tip lands in the next cell over. Radius is
-                    // capped so the fillet stays against ink even when the
-                    // neighbouring bar ends in a stub cap right after the
-                    // junction ((v+rf)·cot22.5° must stay within one cell).
-                    p.op(sectorFillet(a1, gap, v, s * 0.15f), Path.Op.UNION)
+                if ((b1 or b2) and GridModel.DIAG_MASK == 0) continue
+                val rf = when (gap) {
+                    135f, 90f -> rin + 0.75f   // a hair past tangent: no op slivers
+                    // 45°: sharp tip lands a cell over; cap the radius so the
+                    // fillet stays on ink even against a neighbouring stub cap
+                    45f -> s * 0.15f
+                    else -> continue
                 }
+                p.op(sectorFillet(a1, gap, v, rf), Path.Op.UNION)
+                if (b1 and GridModel.ORTHO_MASK != 0) p.op(halfArm(a1, +90f, h, v), Path.Op.UNION)
+                if (b2 and GridModel.ORTHO_MASK != 0) p.op(halfArm(a2, -90f, h, v), Path.Op.UNION)
             }
         }
         return p
+    }
+
+    /** Strip from an arm's centreline to its edge on the given side. */
+    private fun halfArm(angleDeg: Float, sideDeg: Float, len: Float, v: Float): Path {
+        val a = Math.toRadians(angleDeg.toDouble())
+        val nrm = Math.toRadians((angleDeg + sideDeg).toDouble())
+        val dx = kotlin.math.cos(a).toFloat()
+        val dy = kotlin.math.sin(a).toFloat()
+        val nx = (kotlin.math.cos(nrm) * v).toFloat()
+        val ny = (kotlin.math.sin(nrm) * v).toFloat()
+        return Path().apply {
+            moveTo(0f, 0f)
+            lineTo(dx * len, dy * len)
+            lineTo(dx * len + nx, dy * len + ny)
+            lineTo(nx, ny)
+            close()
+        }
     }
 
     private val DIR_ANGLES = listOf(
