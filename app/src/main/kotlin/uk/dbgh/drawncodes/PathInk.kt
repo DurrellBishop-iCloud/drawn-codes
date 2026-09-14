@@ -141,7 +141,17 @@ object PathInk {
                 val gap = a2 - a1
                 val rf = when {
                     gap == 90f || gap == 135f -> 0.25f
-                    gap == 45f -> 0.15f
+                    gap == 45f -> {
+                        // a 45° lens reaches ~0.97 along its flanks; if
+                        // either flank's route turns at its FAR node, the
+                        // turn's arc eats that edge and the lens pokes out
+                        // from under the sweep — leave the crook open (a
+                        // clean V), which is what a pen would do
+                        val far1 = partner.containsKey(End(e1.edge, 1 - e1.side))
+                        val far2 = partner.containsKey(End(e2.edge, 1 - e2.side))
+                        if (far1 || far2) continue
+                        0.15f
+                    }
                     else -> continue
                 }
                 val v = STROKE / 2f

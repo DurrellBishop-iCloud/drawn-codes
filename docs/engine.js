@@ -310,7 +310,16 @@ export function buildInk(model) {
       const gap = Math.round(a2 - a1);
       let rf;
       if (gap === 90 || gap === 135) rf = 0.25;
-      else if (gap === 45) rf = 0.15;
+      else if (gap === 45) {
+        // a 45° lens reaches ~0.97 along its flanks; if either flank's
+        // route TURNS at its far node, the turn's arc eats that edge and
+        // the lens would poke out from under the sweep — leave the crook
+        // open instead (a clean V), which is what a pen would do
+        const far1 = partner.has(endId(e1 >> 1, 1 - (e1 & 1)));
+        const far2 = partner.has(endId(e2 >> 1, 1 - (e2 & 1)));
+        if (far1 || far2) continue;
+        rf = 0.15;
+      }
       else continue;
       addSectorFillet(fills, nx, ny, a1, gap, V, rf);
       // strip length: to the fillet's tangent foot normally; when the
