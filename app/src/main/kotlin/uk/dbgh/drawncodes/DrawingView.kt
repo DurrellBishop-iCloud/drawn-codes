@@ -27,10 +27,23 @@ class DrawingView(context: Context) : View(context) {
     val viewport = Viewport()
 
     var erasing = false
-    var allow45 = true    // recognise 45° moves through corner diamonds
-    var allow90 = true    // draw orthogonal connections
-    var showFill = true   // fill enclosed areas
     var snapping = true   // start-of-stroke offset to the nearest cell centre
+
+    // per-layer drawing modes, remembered with the layer
+    val layerAllow45 = BooleanArray(LAYER_COUNT) { true }
+    val layerAllow90 = BooleanArray(LAYER_COUNT) { true }
+    val layerShowFill = BooleanArray(LAYER_COUNT) { true }
+
+    /** The active layer's modes (the top chips edit these). */
+    var allow45: Boolean
+        get() = layerAllow45[activeLayer]
+        set(v) { layerAllow45[activeLayer] = v }
+    var allow90: Boolean
+        get() = layerAllow90[activeLayer]
+        set(v) { layerAllow90[activeLayer] = v }
+    var showFill: Boolean
+        get() = layerShowFill[activeLayer]
+        set(v) { layerShowFill[activeLayer] = v }
 
     // touch-down offset to the nearest cell centre (screen px): applied to
     // the whole stroke, so pure finger MOTION determines the path and
@@ -112,6 +125,16 @@ class DrawingView(context: Context) : View(context) {
         onChanged?.invoke()
     }
 
+    /** Clear every layer (each pushes its own undo). */
+    fun clearEverything() {
+        for (m in layers) {
+            m.pushUndo()
+            m.clear()
+        }
+        invalidate()
+        onChanged?.invoke()
+    }
+
     fun fitContent() {
         var b: android.graphics.Rect? = null
         for (m in layers) {
@@ -123,7 +146,8 @@ class DrawingView(context: Context) : View(context) {
     }
 
     fun fillFor(layer: Int): FillEngine.Fill =
-        if (showFill) fillEngines[layer].fillFor(layers[layer]) else FillEngine.Fill.EMPTY
+        if (layerShowFill[layer]) fillEngines[layer].fillFor(layers[layer])
+        else FillEngine.Fill.EMPTY
 
     // ---- drawing -------------------------------------------------------
 

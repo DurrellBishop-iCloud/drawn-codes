@@ -17,6 +17,7 @@ object Store {
     private const val MAGIC_V2 = 0x44430002   // four layers + active index
     private const val MAGIC_V3 = 0x44430003   // + per-layer colours
     private const val MAGIC_V4 = 0x44430004   // + layer stacking order
+    private const val MAGIC_V5 = 0x44430005   // + per-layer 45/90/fill modes
 
     private fun file(context: Context) = File(context.filesDir, "drawing.bin")
 
@@ -24,13 +25,20 @@ object Store {
         try {
             val tmp = File(context.filesDir, "drawing.tmp")
             DataOutputStream(tmp.outputStream().buffered()).use { out ->
-                out.writeInt(MAGIC_V4)
+                out.writeInt(MAGIC_V5)
                 out.writeFloat(view.viewport.cellSize)
                 out.writeFloat(view.viewport.originX)
                 out.writeFloat(view.viewport.originY)
                 out.writeInt(view.activeLayer)
                 for (color in view.layerColors) out.writeInt(color)
                 for (idx in view.layerOrder) out.writeInt(idx)
+                for (i in 0 until DrawingView.LAYER_COUNT) {
+                    var f = 0
+                    if (view.layerAllow45[i]) f = f or 1
+                    if (view.layerAllow90[i]) f = f or 2
+                    if (view.layerShowFill[i]) f = f or 4
+                    out.writeInt(f)
+                }
                 for (m in view.layers) {
                     var count = 0
                     m.forEach { _, _, _ -> count++ }
@@ -53,7 +61,7 @@ object Store {
         try {
             DataInputStream(f.inputStream().buffered()).use { input ->
                 val magic = input.readInt()
-                if (magic < MAGIC_V1 || magic > MAGIC_V4) return
+                if (magic < MAGIC_V1 || magic > MAGIC_V5) return
                 val cellSize = input.readFloat()
                 val ox = input.readFloat()
                 val oy = input.readFloat()
@@ -72,6 +80,14 @@ object Store {
                     }
                     if (seen.size != DrawingView.LAYER_COUNT) {
                         for (i in 0 until DrawingView.LAYER_COUNT) view.layerOrder[i] = i
+                    }
+                }
+                if (magic >= MAGIC_V5) {
+                    for (i in 0 until DrawingView.LAYER_COUNT) {
+                        val f = input.readInt()
+                        view.layerAllow45[i] = f and 1 != 0
+                        view.layerAllow90[i] = f and 2 != 0
+                        view.layerShowFill[i] = f and 4 != 0
                     }
                 }
                 val nLayers = if (magic == MAGIC_V1) 1 else DrawingView.LAYER_COUNT

@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.11.5
+// Drawn Codes v0.12.0
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.11.5"
+const val APP_VERSION = "0.12.0"
 
 class MainActivity : AppCompatActivity() {
 
@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(8), dp(8), dp(8), 0)
         }
 
+        val chipRestylers = ArrayList<() -> Unit>()
         fun chip(label: String, active: () -> Boolean, onTap: () -> Unit): TextView =
             TextView(this).apply {
                 text = label
@@ -63,6 +64,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 restyle()
+                chipRestylers.add { restyle() }
                 setOnClickListener { onTap(); restyle() }
                 chipRow.addView(this, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -125,6 +127,7 @@ class MainActivity : AppCompatActivity() {
                             if (!dragging) {
                                 drawingView.activeLayer = i
                                 restyleDots()
+                                chipRestylers.forEach { it() }
                                 if (pickerPanel.visibility == android.view.View.VISIBLE) {
                                     picker.setColor(drawingView.layerColors[i])
                                 }
@@ -239,7 +242,17 @@ class MainActivity : AppCompatActivity() {
             b.setBackgroundColor(
                 if (drawingView.snapping) Color.rgb(40, 90, 150) else Color.rgb(50, 50, 50))
         }.setBackgroundColor(Color.rgb(40, 90, 150))
-        barButton("CLEAR") { drawingView.clearAll() }
+        var lastClearTap = 0L
+        barButton("CLEAR") {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - lastClearTap < 400) {
+                drawingView.clearEverything()
+                Toast.makeText(this, "All layers cleared", Toast.LENGTH_SHORT).show()
+            } else {
+                drawingView.clearAll()
+            }
+            lastClearTap = now
+        }
         barButton("FIT") { drawingView.fitContent() }
         barButton("SAVE") { saveDrawing() }
 
