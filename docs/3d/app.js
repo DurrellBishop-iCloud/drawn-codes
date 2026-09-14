@@ -10,7 +10,7 @@ import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GridModel, computeFill } from '../engine.js?v=w022';
 import { traceSilhouette } from '../silhouette.js?v=w022';
 
-export const APP_VERSION = '3d0.1.1';
+export const APP_VERSION = '3d0.2.0';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -26,6 +26,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf4f4f4);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 viewEl.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -33,7 +35,12 @@ controls.enableDamping = true;
 scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.0));
 const sun = new THREE.DirectionalLight(0xffffff, 1.4);
 sun.position.set(60, 40, 120);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.radius = 4;
+sun.shadow.bias = -0.0004;
 scene.add(sun);
+scene.add(sun.target);
 const sun2 = new THREE.DirectionalLight(0xffffff, 0.5);
 sun2.position.set(-80, -60, 40);
 scene.add(sun2);
@@ -41,6 +48,13 @@ scene.add(sun2);
 const grid = new THREE.GridHelper(200, 20, 0xbbbbbb, 0xdddddd);
 grid.rotation.x = Math.PI / 2;   // grid in the XY (build-plate) plane, Z up
 scene.add(grid);
+
+// shadow-catching build plate (invisible except for received shadows)
+const plate = new THREE.Mesh(
+  new THREE.PlaneGeometry(2000, 2000),
+  new THREE.ShadowMaterial({ opacity: 0.22 }));
+plate.receiveShadow = true;
+scene.add(plate);
 
 const partGroup = new THREE.Group();
 scene.add(partGroup);
@@ -145,6 +159,8 @@ function rebuild() {
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: drawing.colors[li], roughness: 0.55, metalness: 0.05,
     }));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.position.z = z;
     mesh.userData.layer = li;
     partGroup.add(mesh);
@@ -164,6 +180,14 @@ function fitCamera() {
   const c = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3()).length() || 50;
   grid.position.set(c.x, c.y, box.min.z - 0.01);
+  plate.position.set(c.x, c.y, box.min.z - 0.005);
+  // size the shadow camera around the content
+  sun.position.set(c.x + size * 0.5, c.y - size * 0.35, box.max.z + size);
+  sun.target.position.copy(c);
+  const sc = sun.shadow.camera;
+  sc.left = -size; sc.right = size; sc.top = size; sc.bottom = -size;
+  sc.near = 0.1; sc.far = size * 4;
+  sc.updateProjectionMatrix();
   camera.position.set(c.x + size * 0.6, c.y - size * 0.9, box.max.z + size * 0.8);
   camera.up.set(0, 0, 1);
   controls.target.copy(c);
@@ -228,6 +252,27 @@ function rebuildLayerPanel() {
   }
 }
 
+// view presets — jump the camera to reset orientation
+function setView(kind) {
+  const box = new THREE.Box3().setFromObject(partGroup);
+  const c = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+  const s = box.isEmpty() ? 120 : (box.getSize(new THREE.Vector3()).length() || 50) * 1.1;
+  const pos = {
+    top: [c.x, c.y - s * 0.02, c.z + s],
+    front: [c.x, c.y - s, c.z + s * 0.08],
+    side: [c.x + s, c.y, c.z + s * 0.08],
+    iso: [c.x + s * 0.55, c.y - s * 0.7, c.z + s * 0.55],
+  }[kind];
+  camera.position.set(pos[0], pos[1], pos[2]);
+  camera.up.set(0, 0, 1);
+  controls.target.copy(c);
+  controls.update();
+}
+for (const b of document.querySelectorAll('#views button')) {
+  b.onclick = () => b.dataset.v === 'fit' ? fitCamera() : setView(b.dataset.v);
+}
+$('fold').onclick = () => { document.body.classList.toggle('folded'); resize(); };
+
 $('mmcell').oninput = () => { mmPerCell = +$('mmcell').value || 4; rebuild(); };
 // arriving back from the drawing tool: pick up the latest drawing
 addEventListener('focus', () => { drawing = loadDrawing(); rebuildLayerPanel(); rebuild(); });
@@ -239,6 +284,7 @@ $('stl').onclick = exportAll;
 
 // ---- boot ------------------------------------------------------------
 $('ver').textContent = APP_VERSION;
+window.__dc3d = { scene, renderer, sun, plate, partGroup, camera };
 drawing = loadDrawing();
 rebuildLayerPanel();
 resize();

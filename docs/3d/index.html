@@ -32,6 +32,13 @@
        padding: 8px; font-size: 13px; cursor: pointer; }
   #status { color: #9a9a9a; font-size: 11px; min-height: 26px; }
   #ver { color: #777; font-size: 11px; margin-top: auto; }
+  #views { gap: 4px; }
+  #views button { flex: 1; padding: 7px 2px; font-size: 11px; }
+  #fold { position: fixed; top: 8px; right: 8px; z-index: 10; width: 36px;
+          height: 36px; border: none; border-radius: 4px; background: #444;
+          color: #fff; font-size: 16px; cursor: pointer; }
+  body.folded #panel { display: none; }
+  body.folded #view { inset: 0; }
   @media (max-width: 700px) {
     #view { inset: 0 0 260px 0; }
     #panel { top: auto; left: 0; width: auto; height: 260px; }
@@ -40,9 +47,17 @@
 </head>
 <body>
 <div id="view"></div>
+<button id="fold">☰</button>
 <div id="panel">
   <h1>Drawn Codes 3D</h1>
   <div><a href="../" >← drawing tool</a></div>
+  <div class="row" id="views">
+    <button class="mid" data-v="top">TOP</button>
+    <button class="mid" data-v="front">FRONT</button>
+    <button class="mid" data-v="side">SIDE</button>
+    <button class="mid" data-v="iso">¾</button>
+    <button class="mid" data-v="fit">FIT</button>
+  </div>
   <div class="row"><label>mm per cell</label>
     <input type="number" id="mmcell" value="4" min="0.5" step="0.5"></div>
   <div id="layers"></div>
@@ -57,6 +72,6 @@
   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
 } }
 </script>
-<script type="module" src="app.js?v=3d011"></script>
+<script type="module" src="app.js?v=3d020"></script>
 </body>
 </html>
