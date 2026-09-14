@@ -1,8 +1,8 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w023';
-import { traceSilhouette } from './silhouette.js?v=w023';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w024';
+import { traceSilhouette } from './silhouette.js?v=w024';
 
-export const APP_VERSION = 'w0.2.3';
+export const APP_VERSION = 'w0.2.4';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;
@@ -460,8 +460,12 @@ function rebuildDots() {
       const dy = e.clientY - startY;
       d.style.transform = '';
       if (!dragging) {
-        activeLayer = li;
-        rebuildDots(); restyleChips(); syncColorInput();
+        if (activeLayer === li) {
+          colorInput.click();   // second tap on the active dot: pick its colour
+        } else {
+          activeLayer = li;
+          rebuildDots(); restyleChips(); syncColorInput();
+        }
       } else {
         const slots = Math.round(dy / 42);
         const display = [...layerOrder].reverse();

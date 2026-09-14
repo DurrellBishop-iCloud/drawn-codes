@@ -7,8 +7,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-import { GridModel, computeFill } from '../engine.js?v=w023';
-import { traceSilhouette } from '../silhouette.js?v=w023';
+import { GridModel, computeFill } from '../engine.js?v=w024';
+import { traceSilhouette } from '../silhouette.js?v=w024';
 
 export const APP_VERSION = '3d0.3.1';
 const LAYER_COUNT = 4;

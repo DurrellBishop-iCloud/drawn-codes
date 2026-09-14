@@ -10,7 +10,7 @@
 // Slivers and staircase artifacts are unrepresentable: there is one
 // continuous field and one contour, not pieces with seams.
 
-import { computeFill, buildInk, STROKE } from './engine.js?v=w023';
+import { computeFill, buildInk, STROKE } from './engine.js?v=w024';
 
 export const BLUR_CELLS = 0.09;
 
