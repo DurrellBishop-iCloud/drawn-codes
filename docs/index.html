@@ -21,15 +21,15 @@
   .bar button { flex: 1; height: 44px; font-size: 13px; border: none;
                 background: #323232; color: #fff; cursor: pointer; border-radius: 2px; }
   .bar button.on { background: #285a96; }
-  #dots { position: fixed; right: 12px; bottom: 76px; display: flex;
-          flex-direction: column; gap: 8px; }
+  #dock { position: fixed; right: 12px; bottom: 76px; display: flex;
+          flex-direction: column; gap: 8px; align-items: center; }
+  #dots { display: flex; flex-direction: column; gap: 8px; }
   .dot { width: 34px; height: 34px; border-radius: 50%; cursor: grab;
          border: 1px solid rgba(0,0,0,.3); box-sizing: border-box; touch-action: none; }
   .dot.active { border: 3px solid #3c3c3c; }
   #ver { position: fixed; left: 10px; bottom: 66px; font-size: 11px; color: #b4b4b4; }
-  #colorinput { pointer-events: auto; width: 44px; height: 31px; padding: 1px 2px;
-                border: none; background: rgba(0,0,0,.11); cursor: pointer;
-                border-radius: 2px; }
+  #colorinput { width: 38px; height: 28px; padding: 1px 2px; border: none;
+                background: rgba(0,0,0,.11); cursor: pointer; border-radius: 2px; }
   @media (min-width: 900px) {
     .chip { padding: 8px 18px; }
     .bar { left: auto; right: 0; width: 480px; }
@@ -40,14 +40,13 @@
 <canvas id="canvas"></canvas>
 <div class="chiprow">
   <button class="chip" id="undo">UNDO</button>
-  <input type="color" id="colorinput" title="Layer colour">
   <div class="spacer"></div>
   <button class="chip" id="c45">45</button>
   <button class="chip" id="c90">90</button>
   <button class="chip" id="cfill">FILL</button>
   <button class="chip on" id="c3d">3D</button>
 </div>
-<div id="dots"></div>
+<div id="dock"><div id="dots"></div><input type="color" id="colorinput" title="Layer colour"></div>
 <div id="ver"></div>
 <div class="bar">
   <button id="erase">ERASE</button>
@@ -56,6 +55,6 @@
   <button id="fit">FIT</button>
   <button id="save">SAVE</button>
 </div>
-<script type="module" src="main.js?v=w024"></script>
+<script type="module" src="main.js?v=w025"></script>
 </body>
 </html>

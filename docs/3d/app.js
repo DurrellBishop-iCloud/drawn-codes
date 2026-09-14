@@ -7,10 +7,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-import { GridModel, computeFill } from '../engine.js?v=w024';
-import { traceSilhouette } from '../silhouette.js?v=w024';
+import { GridModel, computeFill } from '../engine.js?v=w025';
+import { traceSilhouette } from '../silhouette.js?v=w025';
+import { make3MF } from './threemf.js?v=3d040';
 
-export const APP_VERSION = '3d0.3.1';
+export const APP_VERSION = '3d0.4.0';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -262,6 +263,26 @@ function exportAll() {
   status(`drawncodes.stl — ${(data.byteLength / 1024).toFixed(0)} KB`);
 }
 
+async function export3MF() {
+  scene.updateMatrixWorld(true);
+  const parts = [];
+  for (const li of drawing ? drawing.order : []) {
+    if (solids[li]) {
+      parts.push({ name: `Layer ${li + 1}`, color: drawing.colors[li], mesh: solids[li] });
+    }
+  }
+  if (!parts.length) { status('Nothing to export.'); return; }
+  status('Building 3MF…');
+  const blob = await make3MF(parts, THREE);
+  const a = document.createElement('a');
+  a.download = 'drawncodes.3mf';
+  a.href = URL.createObjectURL(blob);
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  status(`drawncodes.3mf — ${(blob.size / 1024).toFixed(0)} KB, ` +
+    `${parts.length} coloured part${parts.length > 1 ? 's' : ''}`);
+}
+
 function exportLayer(li) {
   const mesh = solids[li];
   if (!mesh) { status('Layer is empty.'); return; }
@@ -333,10 +354,11 @@ document.addEventListener('visibilitychange', () => {
 });
 $('reload').onclick = () => { drawing = loadDrawing(); rebuildLayerPanel(); rebuild(); };
 $('stl').onclick = exportAll;
+$('mf').onclick = export3MF;
 
 // ---- boot ------------------------------------------------------------
 $('ver').textContent = APP_VERSION;
-window.__dc3d = { scene, renderer, sun, plate, partGroup, camera };
+window.__dc3d = { scene, renderer, sun, plate, partGroup, camera, export3MF, make3MF, solids, get drawing() { return drawing; } };
 drawing = loadDrawing();
 rebuildLayerPanel();
 resize();
