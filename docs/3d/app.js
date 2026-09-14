@@ -10,7 +10,7 @@ import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GridModel, computeFill } from '../engine.js?v=w022';
 import { traceSilhouette } from '../silhouette.js?v=w022';
 
-export const APP_VERSION = '3d0.2.0';
+export const APP_VERSION = '3d0.2.1';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -152,8 +152,12 @@ function rebuild() {
     if (!sil || !sil.loops.length) continue;
     const shapes = buildShapes(sil.loops);
     if (!shapes.length) continue;
+    // terraced solids: every layer rises from the build plate to its
+    // level in the stack, so nothing floats — overlaps interpenetrate,
+    // which slicers union automatically
+    z += thickness[li];
     const geo = new THREE.ExtrudeGeometry(shapes, {
-      depth: thickness[li], bevelEnabled: false,
+      depth: z, bevelEnabled: false,
     });
     geo.scale(mmPerCell, mmPerCell, 1);
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
@@ -161,11 +165,10 @@ function rebuild() {
     }));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.position.z = z;
+    mesh.position.z = 0;
     mesh.userData.layer = li;
     partGroup.add(mesh);
     solids[li] = mesh;
-    z += thickness[li];
     built++;
   }
   fitCamera();
