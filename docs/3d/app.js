@@ -7,10 +7,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-import { GridModel, computeFill } from '../engine.js?v=w021';
-import { traceSilhouette } from '../silhouette.js?v=w021';
+import { GridModel, computeFill } from '../engine.js?v=w022';
+import { traceSilhouette } from '../silhouette.js?v=w022';
 
-export const APP_VERSION = '3d0.1.0';
+export const APP_VERSION = '3d0.1.1';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -229,6 +229,11 @@ function rebuildLayerPanel() {
 }
 
 $('mmcell').oninput = () => { mmPerCell = +$('mmcell').value || 4; rebuild(); };
+// arriving back from the drawing tool: pick up the latest drawing
+addEventListener('focus', () => { drawing = loadDrawing(); rebuildLayerPanel(); rebuild(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { drawing = loadDrawing(); rebuildLayerPanel(); rebuild(); }
+});
 $('reload').onclick = () => { drawing = loadDrawing(); rebuildLayerPanel(); rebuild(); };
 $('stl').onclick = exportAll;
 

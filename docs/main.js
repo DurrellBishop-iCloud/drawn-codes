@@ -1,8 +1,8 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w021';
-import { traceSilhouette } from './silhouette.js?v=w021';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w022';
+import { traceSilhouette } from './silhouette.js?v=w022';
 
-export const APP_VERSION = 'w0.2.1';
+export const APP_VERSION = 'w0.2.2';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;
@@ -379,6 +379,7 @@ $('undo').onclick = () => { model().undo(); draw(); saveState(); };
 $('c45').onclick = () => { layerAllow45[activeLayer] = !layerAllow45[activeLayer]; restyleChips(); saveState(); };
 $('c90').onclick = () => { layerAllow90[activeLayer] = !layerAllow90[activeLayer]; restyleChips(); saveState(); };
 $('cfill').onclick = () => { layerShowFill[activeLayer] = !layerShowFill[activeLayer]; restyleChips(); draw(); saveState(); };
+$('c3d').onclick = () => { saveState(); location.href = '3d/'; };
 
 $('erase').onclick = () => {
   erasing = !erasing;
