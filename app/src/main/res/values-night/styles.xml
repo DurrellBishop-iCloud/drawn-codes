@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A genuinely dark base theme in night config stops the system
+         force-theming the app. Every visible surface paints its own
+         explicit colour, so the canvas stays paper-white regardless. -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>
