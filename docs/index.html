@@ -27,7 +27,9 @@
          border: 1px solid rgba(0,0,0,.3); box-sizing: border-box; touch-action: none; }
   .dot.active { border: 3px solid #3c3c3c; }
   #ver { position: fixed; left: 10px; bottom: 66px; font-size: 11px; color: #b4b4b4; }
-  input[type=color] { position: fixed; visibility: hidden; }
+  #colorinput { pointer-events: auto; width: 44px; height: 31px; padding: 1px 2px;
+                border: none; background: rgba(0,0,0,.11); cursor: pointer;
+                border-radius: 2px; }
   @media (min-width: 900px) {
     .chip { padding: 8px 18px; }
     .bar { left: auto; right: 0; width: 480px; }
@@ -38,7 +40,7 @@
 <canvas id="canvas"></canvas>
 <div class="chiprow">
   <button class="chip" id="undo">UNDO</button>
-  <button class="chip" id="pick">＋</button>
+  <input type="color" id="colorinput" title="Layer colour">
   <div class="spacer"></div>
   <button class="chip" id="c45">45</button>
   <button class="chip" id="c90">90</button>
@@ -53,7 +55,6 @@
   <button id="fit">FIT</button>
   <button id="save">SAVE</button>
 </div>
-<input type="color" id="colorinput">
-<script type="module" src="main.js?v=w012"></script>
+<script type="module" src="main.js?v=w013"></script>
 </body>
 </html>

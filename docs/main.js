@@ -1,7 +1,7 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w012';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w013';
 
-export const APP_VERSION = 'w0.1.2';
+export const APP_VERSION = 'w0.1.3';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;
@@ -375,15 +375,14 @@ $('fit').onclick = () => {
 };
 $('save').onclick = exportPNG;
 
-$('pick').onclick = () => {
-  const inp = $('colorinput');
-  inp.value = layerColors[activeLayer];
-  inp.oninput = () => {
-    layerColors[activeLayer] = inp.value;
-    rebuildDots(); draw(); scheduleSave();
-  };
-  inp.click();
+// native colour swatch in the toolbar: always shows the active layer's
+// colour; picking applies live to that layer
+const colorInput = $('colorinput');
+colorInput.oninput = () => {
+  layerColors[activeLayer] = colorInput.value;
+  rebuildDots(); draw(); scheduleSave();
 };
+function syncColorInput() { colorInput.value = layerColors[activeLayer]; }
 
 // layer dots: tap selects, drag reorders
 function rebuildDots() {
@@ -409,7 +408,7 @@ function rebuildDots() {
       d.style.transform = '';
       if (!dragging) {
         activeLayer = li;
-        rebuildDots(); restyleChips();
+        rebuildDots(); restyleChips(); syncColorInput();
       } else {
         const slots = Math.round(dy / 42);
         if (slots !== 0) {
@@ -434,7 +433,7 @@ addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'z') { model().undo(); draw(); saveState(); e.preventDefault(); }
   else if (e.key === 'e') $('erase').click();
   else if (e.key === 'f') $('fit').click();
-  else if (e.key >= '1' && e.key <= '4') { activeLayer = +e.key - 1; rebuildDots(); restyleChips(); }
+  else if (e.key >= '1' && e.key <= '4') { activeLayer = +e.key - 1; rebuildDots(); restyleChips(); syncColorInput(); }
 });
 
 // ---- export ----------------------------------------------------------
@@ -545,4 +544,5 @@ loadState();
 document.getElementById('ver').textContent = APP_VERSION;
 rebuildDots();
 restyleChips();
+syncColorInput();
 resize();
