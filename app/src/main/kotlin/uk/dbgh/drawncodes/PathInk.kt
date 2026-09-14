@@ -144,9 +144,14 @@ object PathInk {
                     gap == 45f -> 0.15f
                     else -> continue
                 }
-                addSectorFillet(fills, nx, ny, a1, gap, STROKE / 2f, rf)
-                addHalfStrip(fills, nx, ny, a1, +90f, STROKE / 2f)
-                addHalfStrip(fills, nx, ny, a2, -90f, STROKE / 2f)
+                val v = STROKE / 2f
+                addSectorFillet(fills, nx, ny, a1, gap, v, rf)
+                // strips reach just past the fillet's tangent feet — any
+                // longer and they poke out of a neighbouring turn's sweep
+                val foot = ((v + rf) / kotlin.math.tan(
+                    Math.toRadians(gap / 2.0))).toFloat() + 0.06f
+                addHalfStrip(fills, nx, ny, a1, +90f, v, foot)
+                addHalfStrip(fills, nx, ny, a2, -90f, v, foot)
             }
         }
         model.forEach { r, c, code ->
@@ -194,12 +199,11 @@ object PathInk {
     /** Strip from an arm's centreline to its edge on one side, so fillet
      *  edges always sit on straight ink even where a route curves away. */
     private fun addHalfStrip(path: Path, cx: Float, cy: Float,
-                             angleDeg: Float, sideDeg: Float, v: Float) {
+                             angleDeg: Float, sideDeg: Float, v: Float, len: Float) {
         val a = Math.toRadians(angleDeg.toDouble())
         val n = Math.toRadians((angleDeg + sideDeg).toDouble())
         val dx = cos(a).toFloat(); val dy = sin(a).toFloat()
         val nx = cos(n).toFloat() * v; val ny = sin(n).toFloat() * v
-        val len = 1.05f
         path.moveTo(cx, cy)
         path.lineTo(cx + dx * len, cy + dy * len)
         path.lineTo(cx + dx * len + nx, cy + dy * len + ny)

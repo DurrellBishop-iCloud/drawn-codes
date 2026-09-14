@@ -11,8 +11,8 @@ android {
         applicationId = "uk.dbgh.drawncodes"
         minSdk = 26
         targetSdk = 34
-        versionCode = 21
-        versionName = "0.11.1"
+        versionCode = 22
+        versionName = "0.11.2"
     }
 
     compileOptions {
