@@ -146,12 +146,17 @@ object PathInk {
                 }
                 val v = STROKE / 2f
                 addSectorFillet(fills, nx, ny, a1, gap, v, rf)
-                // strips reach just past the fillet's tangent feet — any
-                // longer and they poke out of a neighbouring turn's sweep
+                // strip length: to the fillet's tangent foot normally —
+                // longer pokes out of a NEIGHBOUR cell's turn. But when the
+                // member itself turns at THIS node, its arc pulls away from
+                // the sector; run the strip past the arc foot (0.5) so the
+                // flank stays straight and no sliver opens against the arc.
                 val foot = ((v + rf) / kotlin.math.tan(
                     Math.toRadians(gap / 2.0))).toFloat() + 0.06f
-                addHalfStrip(fills, nx, ny, a1, +90f, v, foot)
-                addHalfStrip(fills, nx, ny, a2, -90f, v, foot)
+                addHalfStrip(fills, nx, ny, a1, +90f, v,
+                    if (partner.containsKey(e1)) 0.56f else foot)
+                addHalfStrip(fills, nx, ny, a2, -90f, v,
+                    if (partner.containsKey(e2)) 0.56f else foot)
             }
         }
         model.forEach { r, c, code ->

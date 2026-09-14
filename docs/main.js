@@ -1,7 +1,7 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
 import { GridModel, computeFill, buildInk, STROKE } from './engine.js';
 
-export const APP_VERSION = 'w0.1.0';
+export const APP_VERSION = 'w0.1.1';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;

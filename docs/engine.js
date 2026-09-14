@@ -313,9 +313,12 @@ export function buildInk(model) {
       else if (gap === 45) rf = 0.15;
       else continue;
       addSectorFillet(fills, nx, ny, a1, gap, V, rf);
+      // strip length: to the fillet's tangent foot normally; when the
+      // member turns at THIS node its arc pulls away from the sector,
+      // so run the strip past the arc foot (0.5) to keep the flank straight
       const foot = (V + rf) / Math.tan(gap * Math.PI / 360) + 0.06;
-      addHalfStrip(fills, nx, ny, a1, +90, V, foot);
-      addHalfStrip(fills, nx, ny, a2, -90, V, foot);
+      addHalfStrip(fills, nx, ny, a1, +90, V, partner.has(e1) ? 0.56 : foot);
+      addHalfStrip(fills, nx, ny, a2, -90, V, partner.has(e2) ? 0.56 : foot);
     }
   }
   model.forEach((r, c, code) => {
