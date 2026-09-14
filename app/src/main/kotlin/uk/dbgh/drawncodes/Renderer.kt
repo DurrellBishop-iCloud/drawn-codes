@@ -6,9 +6,9 @@ import android.graphics.Paint
 import android.graphics.Path
 
 /**
- * Draws a model (fill first, then tiles) onto any canvas — the screen view
- * and the PNG exporter share this. The transform is given as cellSize plus
- * the pixel offset of world cell (0,0).
+ * Draws a model (fill first, then the stroked skeleton) onto any canvas —
+ * the screen view and the PNG exporter share this. The transform is given
+ * as cellSize plus the pixel offset of world cell (0,0)'s top-left corner.
  */
 object Renderer {
 
@@ -16,17 +16,44 @@ object Renderer {
         color = Color.BLACK
         style = Paint.Style.FILL
     }
+    private val stroke: Paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = PathInk.STROKE
+    }
+
+    private var cachedInk: PathInk.Ink? = null
+    private var cachedVersion = -1L
 
     private val tri = Path()
 
     fun render(canvas: Canvas, model: GridModel, fill: FillEngine.Fill,
                cellSize: Float, offsetX: Float, offsetY: Float) {
+        drawFill(canvas, fill, cellSize, offsetX, offsetY)
+
+        if (model.version != cachedVersion) {
+            cachedInk = PathInk.build(model)
+            cachedVersion = model.version
+        }
+        val paths = cachedInk ?: return
+        canvas.save()
+        // path coordinates are cell units with centres on integers
+        canvas.translate(offsetX + 0.5f * cellSize, offsetY + 0.5f * cellSize)
+        canvas.scale(cellSize, cellSize)
+        canvas.drawPath(paths.strokes, stroke)
+        canvas.drawPath(paths.fills, ink)
+        canvas.restore()
+    }
+
+    // enclosed-area fill: row runs of fully-filled half-cells (slightly
+    // padded so antialiased edges don't leave seams), then the triangle
+    // halves left by 45° boundaries
+    private fun drawFill(canvas: Canvas, fill: FillEngine.Fill,
+                         cellSize: Float, offsetX: Float, offsetY: Float) {
         val w = canvas.width.toFloat()
         val h = canvas.height.toFloat()
-
-        // enclosed-area fill: row runs of fully-filled half-cells (slightly
-        // padded so antialiased edges don't leave seams), then the
-        // triangle halves left by 45° boundaries
         val hs = cellSize / 2f
         for (y in 0 until fill.height) {
             val top = offsetY + (fill.originHalfR + y) * hs
@@ -55,47 +82,26 @@ object Renderer {
                 }
             }
         }
-
-        // tiles
-        val scale = cellSize / TileSet.REF
-        model.forEach { r, c, code ->
-            val path = if (code and GridModel.SHAPE_MASK == 0) {
-                if (code and GridModel.TOUCHED != 0) TileSet.dot else null
-            } else TileSet.pathFor(code)
-            if (path != null) {
-                val cx = offsetX + (c + 0.5f) * cellSize
-                val cy = offsetY + (r + 0.5f) * cellSize
-                if (cx + cellSize >= 0 && cx - cellSize <= w &&
-                    cy + cellSize >= 0 && cy - cellSize <= h) {
-                    canvas.save()
-                    canvas.translate(cx, cy)
-                    canvas.scale(scale, scale)
-                    canvas.drawPath(path, ink)
-                    canvas.restore()
-                }
-            }
-        }
     }
 
     // A cut half-cell's diagonal follows its cell's centre→corner line:
     // NW–SE when local x,y share parity (t0 = NE triangle), NE–SW
-    // otherwise (t0 = NW triangle). Origins are cell-aligned, so local
-    // parity is quadrant parity.
+    // otherwise (t0 = NW triangle).
     private fun drawTriangle(canvas: Canvas, st: Byte, y: Int, x: Int,
                              left: Float, top: Float, hs: Float) {
         val right = left + hs
         val bottom = top + hs
         tri.rewind()
-        if ((x % 2) == (y % 2)) {   // NW–SE diagonal
-            if (st == FillEngine.TRI0) {   // NE
+        if ((x % 2) == (y % 2)) {
+            if (st == FillEngine.TRI0) {
                 tri.moveTo(left, top); tri.lineTo(right, top); tri.lineTo(right, bottom)
-            } else {                       // SW
+            } else {
                 tri.moveTo(left, top); tri.lineTo(left, bottom); tri.lineTo(right, bottom)
             }
-        } else {                    // NE–SW diagonal
-            if (st == FillEngine.TRI0) {   // NW
+        } else {
+            if (st == FillEngine.TRI0) {
                 tri.moveTo(left, top); tri.lineTo(right, top); tri.lineTo(left, bottom)
-            } else {                       // SE
+            } else {
                 tri.moveTo(right, top); tri.lineTo(right, bottom); tri.lineTo(left, bottom)
             }
         }

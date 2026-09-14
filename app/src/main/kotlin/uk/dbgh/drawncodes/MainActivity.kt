@@ -1,13 +1,13 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.7.2
+// Drawn Codes v0.8.0
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
 // areas fill solid (even-odd nesting).
 //
 // Modules: GridModel (sparse cells + undo), FillEngine (enclosure),
-// TileSet (tile geometry), Renderer (screen + export drawing),
+// PathInk (skeleton-stroke geometry), Renderer (screen + export),
 // Viewport (pan/zoom), DrawingView (gestures), Exporter (PNG save).
 
 import android.graphics.Color
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.7.2"
+const val APP_VERSION = "0.8.0"
 
 class MainActivity : AppCompatActivity() {
 
