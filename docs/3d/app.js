@@ -10,7 +10,7 @@ import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { GridModel, computeFill } from '../engine.js?v=w023';
 import { traceSilhouette } from '../silhouette.js?v=w023';
 
-export const APP_VERSION = '3d0.2.3';
+export const APP_VERSION = '3d0.3.0';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -24,13 +24,37 @@ const solids = [];                // per layer index: THREE.Mesh or null
 const viewEl = document.getElementById('view');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf4f4f4);
-const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+let camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+let orthoHalf = 100;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 viewEl.appendChild(renderer.domElement);
-const controls = new OrbitControls(camera, renderer.domElement);
+let controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+
+function toggleProjection() {
+  const target = controls.target.clone();
+  const pos = camera.position.clone();
+  if (camera.isPerspectiveCamera) {
+    orthoHalf = pos.distanceTo(target) *
+      Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -5000, 5000);
+  } else {
+    camera = new THREE.PerspectiveCamera(40, 1, 0.1, 5000);
+  }
+  camera.position.copy(pos);
+  camera.up.set(0, 0, 1);
+  controls.dispose();
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.target.copy(target);
+  controls.update();
+  resize();
+  if (window.__dc3d) window.__dc3d.camera = camera;
+  const b = document.getElementById('proj');
+  b.textContent = camera.isPerspectiveCamera ? 'PERSP' : 'ORTHO';
+}
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.0));
 const sun = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -63,7 +87,15 @@ function resize() {
   const w = viewEl.clientWidth, h = viewEl.clientHeight;
   renderer.setSize(w, h);
   renderer.setPixelRatio(window.devicePixelRatio || 1);
-  camera.aspect = w / h;
+  const aspect = w / h;
+  if (camera.isPerspectiveCamera) {
+    camera.aspect = aspect;
+  } else {
+    camera.left = -orthoHalf * aspect;
+    camera.right = orthoHalf * aspect;
+    camera.top = orthoHalf;
+    camera.bottom = -orthoHalf;
+  }
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
@@ -164,14 +196,8 @@ function rebuild() {
       depth: z, bevelEnabled: false,
     });
     geo.scale(mmPerCell, mmPerCell, 1);
-    // coincident walls between layers z-fight; bias each layer a step
-    // nearer than the one below so the upper always wins (render-only —
-    // exported geometry is untouched)
     const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: drawing.colors[li], roughness: 0.55, metalness: 0.05,
-      polygonOffset: true,
-      polygonOffsetFactor: -2 * (built + 1),
-      polygonOffsetUnits: -2 * (built + 1),
     }));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -203,8 +229,10 @@ function fitCamera() {
   sc.updateProjectionMatrix();
   camera.position.set(c.x + size * 0.6, c.y - size * 0.9, box.max.z + size * 0.8);
   camera.up.set(0, 0, 1);
+  if (camera.isOrthographicCamera) { orthoHalf = size * 0.55; camera.zoom = 1; }
   controls.target.copy(c);
   controls.update();
+  resize();
 }
 
 // ---- export ----------------------------------------------------------
@@ -278,12 +306,15 @@ function setView(kind) {
   }[kind];
   camera.position.set(pos[0], pos[1], pos[2]);
   camera.up.set(0, 0, 1);
+  if (camera.isOrthographicCamera) { orthoHalf = s * 0.5; camera.zoom = 1; }
   controls.target.copy(c);
   controls.update();
+  resize();
 }
 for (const b of document.querySelectorAll('#views button')) {
   b.onclick = () => b.dataset.v === 'fit' ? fitCamera() : setView(b.dataset.v);
 }
+document.getElementById('proj').onclick = toggleProjection;
 $('fold').onclick = () => { document.body.classList.toggle('folded'); resize(); };
 
 $('mmcell').oninput = () => { mmPerCell = +$('mmcell').value || 4; rebuild(); };
