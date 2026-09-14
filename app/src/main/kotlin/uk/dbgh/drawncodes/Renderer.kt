@@ -24,20 +24,24 @@ object Renderer {
         strokeWidth = PathInk.STROKE
     }
 
-    private var cachedInk: PathInk.Ink? = null
-    private var cachedVersion = -1L
+    private class Cached(var version: Long, var ink: PathInk.Ink)
+    private val cache = java.util.WeakHashMap<GridModel, Cached>()
 
     private val tri = Path()
 
     fun render(canvas: Canvas, model: GridModel, fill: FillEngine.Fill,
-               cellSize: Float, offsetX: Float, offsetY: Float) {
+               cellSize: Float, offsetX: Float, offsetY: Float,
+               color: Int = Color.BLACK) {
+        ink.color = color
+        stroke.color = color
         drawFill(canvas, fill, cellSize, offsetX, offsetY)
 
-        if (model.version != cachedVersion) {
-            cachedInk = PathInk.build(model)
-            cachedVersion = model.version
+        var cached = cache[model]
+        if (cached == null || cached.version != model.version) {
+            cached = Cached(model.version, PathInk.build(model))
+            cache[model] = cached
         }
-        val paths = cachedInk ?: return
+        val paths = cached.ink
         canvas.save()
         // path coordinates are cell units with centres on integers
         canvas.translate(offsetX + 0.5f * cellSize, offsetY + 0.5f * cellSize)

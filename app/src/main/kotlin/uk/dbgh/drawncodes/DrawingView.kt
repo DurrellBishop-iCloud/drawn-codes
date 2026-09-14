@@ -16,9 +16,15 @@ import kotlin.math.hypot
  */
 class DrawingView(context: Context) : View(context) {
 
-    val model = GridModel()
+    /** Four drawing layers, one colour each; strokes go to the active one. */
+    val layers = Array(LAYER_COUNT) { GridModel() }
+    private val fillEngines = Array(LAYER_COUNT) { FillEngine() }
+    var activeLayer = 0
+
+    /** The layer strokes currently draw into. */
+    val model: GridModel get() = layers[activeLayer]
+
     val viewport = Viewport()
-    private val fillEngine = FillEngine()
 
     var erasing = false
     var allow45 = true    // recognise 45° moves through corner diamonds
@@ -50,6 +56,13 @@ class DrawingView(context: Context) : View(context) {
     companion object {
         /** Corner diamond reach (|dx|+|dy| in cell units) for hit-testing. */
         const val CORNER_ZONE = 0.38f
+
+        const val LAYER_COUNT = 4
+        val LAYER_COLORS = intArrayOf(
+            0xFF000000.toInt(),   // black
+            0xFFE0362C.toInt(),   // red
+            0xFF1D6FE0.toInt(),   // blue
+            0xFFF2A900.toInt())   // amber
     }
 
     // nav state
@@ -87,13 +100,17 @@ class DrawingView(context: Context) : View(context) {
     }
 
     fun fitContent() {
-        val b = model.bounds()
+        var b: android.graphics.Rect? = null
+        for (m in layers) {
+            val mb = m.bounds() ?: continue
+            if (b == null) b = mb else b.union(mb)
+        }
         if (b != null) viewport.fit(b, width, height) else viewport.reset(width)
         invalidate()
     }
 
-    fun currentFill(): FillEngine.Fill =
-        if (showFill) fillEngine.fillFor(model) else FillEngine.Fill.EMPTY
+    fun fillFor(layer: Int): FillEngine.Fill =
+        if (showFill) fillEngines[layer].fillFor(layers[layer]) else FillEngine.Fill.EMPTY
 
     // ---- drawing -------------------------------------------------------
 
@@ -101,11 +118,15 @@ class DrawingView(context: Context) : View(context) {
         super.onDraw(canvas)
         drawGuideGrid(canvas)
         val radius = viewport.cellSize * InkSmooth.RADIUS_FRACTION
-        InkSmooth.draw(canvas, width, height, radius) { c ->
-            Renderer.render(c, model, currentFill(),
-                viewport.cellSize,
-                -viewport.originX * viewport.cellSize,
-                -viewport.originY * viewport.cellSize)
+        for (i in 0 until LAYER_COUNT) {
+            if (layers[i].isEmpty) continue
+            InkSmooth.draw(canvas, width, height, radius, LAYER_COLORS[i], i) { c ->
+                Renderer.render(c, layers[i], fillFor(i),
+                    viewport.cellSize,
+                    -viewport.originX * viewport.cellSize,
+                    -viewport.originY * viewport.cellSize,
+                    LAYER_COLORS[i])
+            }
         }
         canvas.drawText("v$APP_VERSION", 12f, height - 10f, hudPaint)
     }

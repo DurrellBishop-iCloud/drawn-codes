@@ -11,12 +11,13 @@ import android.os.Build
 /**
  * Final smoothing pass over the rendered ink: gaussian blur + threshold
  * (morphological rounding). Closes sub-stroke-width cracks and rounds
- * every concave notch that per-cell tile composition can't see across
- * cells — and matches the soft look of the reference marker drawings.
+ * concave notches globally — and matches the soft look of the reference
+ * marker drawings.
  *
- * Screen path uses a RenderNode with a blur + AGSL threshold chain
- * (API 33+; older devices just draw unsmoothed). Export uses a CPU
- * box-blur approximation + threshold.
+ * Screen path: one RenderNode per layer with a blur + AGSL threshold
+ * chain that also tints the result with the layer colour (only the ink's
+ * alpha matters; API 33+, older devices draw unsmoothed). Export path:
+ * CPU box-blur + threshold on a black/white mask.
  */
 object InkSmooth {
 
@@ -25,30 +26,30 @@ object InkSmooth {
 
     private const val THRESHOLD_AGSL = """
         uniform shader inp;
+        layout(color) uniform half4 col;
         half4 main(float2 xy) {
             half a = inp.eval(xy).a;
             half t = smoothstep(0.42, 0.58, a);
-            return half4(0.0, 0.0, 0.0, t);
+            return half4(col.rgb * t, t);
         }
     """
 
-    private val node: RenderNode? =
-        if (Build.VERSION.SDK_INT >= 29) RenderNode("ink") else null
+    private val nodes = HashMap<Int, RenderNode>()
 
     val available: Boolean
-        get() = Build.VERSION.SDK_INT >= 33 && node != null
+        get() = Build.VERSION.SDK_INT >= 33
 
     /**
-     * Draw `drawInk` smoothed onto `canvas`. Falls back to drawing
-     * directly when the effect isn't available (old API, software canvas).
+     * Draw `drawInk` smoothed and tinted `color` onto `canvas`. Falls back
+     * to drawing directly when the effect isn't available.
      */
     fun draw(canvas: Canvas, width: Int, height: Int, radiusPx: Float,
-             drawInk: (Canvas) -> Unit) {
-        val n = node
-        if (!available || n == null || !canvas.isHardwareAccelerated || radiusPx < 1f) {
+             color: Int, key: Int, drawInk: (Canvas) -> Unit) {
+        if (!available || !canvas.isHardwareAccelerated || radiusPx < 1f) {
             drawInk(canvas)
             return
         }
+        val n = nodes.getOrPut(key) { RenderNode("ink$key") }
         n.setPosition(0, 0, width, height)
         val rec = n.beginRecording(width, height)
         try {
@@ -58,16 +59,17 @@ object InkSmooth {
         }
         val blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP)
         val threshold = RuntimeShader(THRESHOLD_AGSL)
+        threshold.setColorUniform("col", color)
         n.setRenderEffect(RenderEffect.createChainEffect(
             RenderEffect.createRuntimeShaderEffect(threshold, "inp"), blur))
         canvas.drawRenderNode(n)
     }
 
     /**
-     * CPU equivalent for export bitmaps: blur the black/white image
+     * CPU equivalent for export masks: blur the black/white image
      * (3× separable box blur ≈ gaussian) and threshold back to ink.
      */
-    fun smoothBitmap(bmp: Bitmap, radiusPx: Int) {
+    fun smoothMask(bmp: Bitmap, radiusPx: Int) {
         if (radiusPx < 1) return
         val w = bmp.width
         val h = bmp.height

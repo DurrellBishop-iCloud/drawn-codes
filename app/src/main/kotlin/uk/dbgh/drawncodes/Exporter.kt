@@ -5,22 +5,30 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.provider.MediaStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Renders the drawing cropped to its used cells (+1 cell margin) and saves
- * it as a PNG into Pictures/DrawnCodes via MediaStore.
+ * Renders all layers cropped to their combined used cells (+1 cell
+ * margin) and saves a PNG into Pictures/DrawnCodes via MediaStore. Each
+ * layer is rendered as a mask, smoothed on the CPU, then composited in
+ * its colour, bottom layer first.
  */
 object Exporter {
 
     private const val PX_PER_CELL = 80f
     private const val MAX_SIDE = 8192
 
-    fun renderBitmap(model: GridModel, fill: FillEngine.Fill): Bitmap? {
-        val b = model.bounds() ?: return null
+    fun renderBitmap(view: DrawingView): Bitmap? {
+        var b: Rect? = null
+        for (m in view.layers) {
+            val mb = m.bounds() ?: continue
+            if (b == null) b = mb else b.union(mb)
+        }
+        if (b == null) return null
         val minC = b.left - 1
         val minR = b.top - 1
         val cellsW = b.width() + 3   // inclusive bounds + margin both sides
@@ -29,13 +37,30 @@ object Exporter {
         val side = maxOf(cellsW, cellsH) * px
         if (side > MAX_SIDE) px = MAX_SIDE / maxOf(cellsW, cellsH).toFloat()
 
-        val bmp = Bitmap.createBitmap((cellsW * px).toInt(), (cellsH * px).toInt(),
-            Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        canvas.drawColor(Color.WHITE)
-        Renderer.render(canvas, model, fill, px, -minC * px, -minR * px)
-        InkSmooth.smoothBitmap(bmp, (px * InkSmooth.RADIUS_FRACTION).toInt())
-        return bmp
+        val w = (cellsW * px).toInt()
+        val h = (cellsH * px).toInt()
+        val outPx = IntArray(w * h) { 0xFFFFFFFF.toInt() }
+
+        val mask = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val maskPx = IntArray(w * h)
+        for (i in 0 until DrawingView.LAYER_COUNT) {
+            val m = view.layers[i]
+            if (m.isEmpty) continue
+            mask.eraseColor(Color.WHITE)
+            val canvas = Canvas(mask)
+            Renderer.render(canvas, m, view.fillFor(i), px, -minC * px, -minR * px, Color.BLACK)
+            InkSmooth.smoothMask(mask, (px * InkSmooth.RADIUS_FRACTION).toInt())
+            mask.getPixels(maskPx, 0, w, 0, 0, w, h)
+            val color = DrawingView.LAYER_COLORS[i]
+            for (j in maskPx.indices) {
+                if (maskPx[j] and 0xFF < 128) outPx[j] = color
+            }
+        }
+        mask.recycle()
+
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(outPx, 0, w, 0, 0, w, h)
+        return out
     }
 
     /** Returns the saved display name, or null on failure. */

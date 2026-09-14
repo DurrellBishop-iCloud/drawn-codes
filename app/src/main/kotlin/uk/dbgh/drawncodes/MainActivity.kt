@@ -1,6 +1,6 @@
 package uk.dbgh.drawncodes
 
-// Drawn Codes v0.8.0
+// Drawn Codes v0.9.0
 // Grid drawing tool: finger crossing a cell boundary sets one of four
 // orthogonal + four diagonal connection bits per cell. One finger draws,
 // two fingers pinch-zoom and pan; the canvas is unbounded. Enclosed
@@ -20,7 +20,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-const val APP_VERSION = "0.8.0"
+const val APP_VERSION = "0.9.0"
 
 class MainActivity : AppCompatActivity() {
 
@@ -72,6 +72,36 @@ class MainActivity : AppCompatActivity() {
             }
 
         chip("UNDO", { false }) { drawingView.undo() }
+
+        // four colour dots — each one is a layer
+        val dots = ArrayList<Pair<android.view.View, android.graphics.drawable.GradientDrawable>>()
+        fun restyleDots() {
+            for ((idx, pair) in dots.withIndex()) {
+                pair.second.setStroke(
+                    if (drawingView.activeLayer == idx) dp(3) else dp(1),
+                    if (drawingView.activeLayer == idx) Color.rgb(60, 60, 60)
+                    else Color.argb(70, 0, 0, 0))
+            }
+        }
+        for (i in 0 until DrawingView.LAYER_COUNT) {
+            val d = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(DrawingView.LAYER_COLORS[i])
+            }
+            val dot = android.view.View(this).apply {
+                background = d
+                setOnClickListener {
+                    drawingView.activeLayer = i
+                    restyleDots()
+                }
+            }
+            dots.add(dot to d)
+            chipRow.addView(dot, LinearLayout.LayoutParams(dp(30), dp(30)).apply {
+                setMargins(dp(5), dp(2), dp(5), 0)
+            })
+        }
+        restyleDots()
+
         chipRow.addView(android.view.View(this),
             LinearLayout.LayoutParams(0, 1, 1f))   // spacer
         chip("45", { drawingView.allow45 }) { drawingView.allow45 = !drawingView.allow45 }
@@ -132,7 +162,7 @@ class MainActivity : AppCompatActivity() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private fun saveDrawing() {
-        val bmp = Exporter.renderBitmap(drawingView.model, drawingView.currentFill())
+        val bmp = Exporter.renderBitmap(drawingView)
         if (bmp == null) {
             Toast.makeText(this, "Nothing to save", Toast.LENGTH_SHORT).show()
             return

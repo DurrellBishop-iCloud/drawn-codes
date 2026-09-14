@@ -6,13 +6,15 @@ import java.io.DataOutputStream
 import java.io.File
 
 /**
- * Persists the drawing (and the viewport) to app-private storage so the
- * canvas survives restarts and app updates. The data is tiny — a handful
- * of bytes per touched cell — so saves are synchronous after each stroke.
+ * Persists the drawing (all layers and the viewport) to app-private
+ * storage so the canvas survives restarts and app updates. The data is
+ * tiny — a handful of bytes per touched cell — so saves are synchronous
+ * after each stroke.
  */
 object Store {
 
-    private const val MAGIC = 0x44430001   // "DC" + format version 1
+    private const val MAGIC_V1 = 0x44430001   // single layer
+    private const val MAGIC_V2 = 0x44430002   // four layers + active index
 
     private fun file(context: Context) = File(context.filesDir, "drawing.bin")
 
@@ -20,16 +22,19 @@ object Store {
         try {
             val tmp = File(context.filesDir, "drawing.tmp")
             DataOutputStream(tmp.outputStream().buffered()).use { out ->
-                out.writeInt(MAGIC)
+                out.writeInt(MAGIC_V2)
                 out.writeFloat(view.viewport.cellSize)
                 out.writeFloat(view.viewport.originX)
                 out.writeFloat(view.viewport.originY)
-                var count = 0
-                view.model.forEach { _, _, _ -> count++ }
-                out.writeInt(count)
-                view.model.forEach { r, c, code ->
-                    out.writeLong(GridModel.key(r, c))
-                    out.writeInt(code)
+                out.writeInt(view.activeLayer)
+                for (m in view.layers) {
+                    var count = 0
+                    m.forEach { _, _, _ -> count++ }
+                    out.writeInt(count)
+                    m.forEach { r, c, code ->
+                        out.writeLong(GridModel.key(r, c))
+                        out.writeInt(code)
+                    }
                 }
             }
             tmp.renameTo(file(context))
@@ -43,17 +48,24 @@ object Store {
         if (!f.exists()) return
         try {
             DataInputStream(f.inputStream().buffered()).use { input ->
-                if (input.readInt() != MAGIC) return
+                val magic = input.readInt()
+                if (magic != MAGIC_V1 && magic != MAGIC_V2) return
                 val cellSize = input.readFloat()
                 val ox = input.readFloat()
                 val oy = input.readFloat()
-                val count = input.readInt()
-                val cells = HashMap<Long, Int>(count * 2)
-                repeat(count) {
-                    val k = input.readLong()
-                    cells[k] = input.readInt()
+                if (magic == MAGIC_V2) {
+                    view.activeLayer = input.readInt().coerceIn(0, DrawingView.LAYER_COUNT - 1)
                 }
-                view.model.restore(cells)
+                val nLayers = if (magic == MAGIC_V2) DrawingView.LAYER_COUNT else 1
+                for (i in 0 until nLayers) {
+                    val count = input.readInt()
+                    val cells = HashMap<Long, Int>(count * 2)
+                    repeat(count) {
+                        val k = input.readLong()
+                        cells[k] = input.readInt()
+                    }
+                    view.layers[i].restore(cells)
+                }
                 view.viewport.restore(cellSize, ox, oy)
                 view.viewportRestored = true
                 view.invalidate()
