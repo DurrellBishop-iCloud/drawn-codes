@@ -1,7 +1,8 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w014';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w020';
+import { traceSilhouette } from './silhouette.js?v=w020';
 
-export const APP_VERSION = 'w0.1.4';
+export const APP_VERSION = 'w0.2.0';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;
@@ -22,6 +23,7 @@ const MIN_CELL = 14, MAX_CELL = 400;
 
 const fillCache = Array.from({ length: LAYER_COUNT }, () => ({ v: -1, fill: null }));
 const inkCache = Array.from({ length: LAYER_COUNT }, () => ({ v: -1, ink: null }));
+const silCache = Array.from({ length: LAYER_COUNT }, () => ({ v: -1, show: null, sil: null }));
 
 const model = () => layers[activeLayer];
 
@@ -64,6 +66,15 @@ function inkFor(i) {
   if (c.v !== layers[i].version) { c.ink = buildInk(layers[i]); c.v = layers[i].version; }
   return c.ink;
 }
+function silFor(i) {
+  const c = silCache[i];
+  if (c.v !== layers[i].version || c.show !== layerShowFill[i]) {
+    c.sil = traceSilhouette(layers[i], fillFor(i));
+    c.v = layers[i].version;
+    c.show = layerShowFill[i];
+  }
+  return c.sil;
+}
 
 function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -100,6 +111,19 @@ function drawLayer(i) {
   const offY = -viewport.originY * s;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = color;
+
+  // settled layers draw their traced silhouette — one watertight vector
+  // outline; the layer being actively drawn falls through to the raw
+  // piece renderer until the finger lifts
+  if (!(mode === 'draw' && i === activeLayer)) {
+    const sil = silFor(i);
+    if (sil) {
+      ctx.translate(offX + 0.5 * s, offY + 0.5 * s);
+      ctx.scale(s, s);
+      ctx.fill(sil.path, 'evenodd');
+      return;
+    }
+  }
 
   // enclosure fill: half-cell runs + triangles
   const fill = fillFor(i);
@@ -466,43 +490,17 @@ function exportPNG() {
   octx.fillRect(0, 0, w, h);
   for (const i of layerOrder) {
     if (layers[i].isEmpty) continue;
-    const color = layerColors[i];
-    octx.setTransform(1, 0, 0, 1, 0, 0);
-    octx.fillStyle = color;
-    const fill = fillFor(i);
+    // retrace at export precision — the model is the source of truth,
+    // derivations regenerate at any fidelity
+    const sil = traceSilhouette(layers[i], fillFor(i), 32);
+    if (!sil) continue;
     const offX = -(b.minC - 1) * px, offY = -(b.minR - 1) * px;
-    if (fill) {
-      const hs = px / 2;
-      for (let y = 0; y < fill.hh; y++) for (let x = 0; x < fill.hw; x++) {
-        const st = fill.state[y * fill.hw + x];
-        if (st === 0) continue;
-        const left = offX + (fill.originHalfC + x) * hs;
-        const top = offY + (fill.originHalfR + y) * hs;
-        if (st === 1) octx.fillRect(left - 0.5, top - 0.5, hs + 1, hs + 1);
-        else {
-          octx.beginPath();
-          const r = left + hs, bo = top + hs;
-          if ((x & 1) === (y & 1)) {
-            if (st === 2) { octx.moveTo(left, top); octx.lineTo(r, top); octx.lineTo(r, bo); }
-            else { octx.moveTo(left, top); octx.lineTo(left, bo); octx.lineTo(r, bo); }
-          } else {
-            if (st === 2) { octx.moveTo(left, top); octx.lineTo(r, top); octx.lineTo(left, bo); }
-            else { octx.moveTo(r, top); octx.lineTo(r, bo); octx.lineTo(left, bo); }
-          }
-          octx.closePath(); octx.fill();
-        }
-      }
-    }
-    const ink = inkFor(i);
     octx.setTransform(1, 0, 0, 1, offX + 0.5 * px, offY + 0.5 * px);
     octx.scale(px, px);
-    octx.strokeStyle = color;
-    octx.lineWidth = STROKE;
-    octx.lineCap = 'round';
-    octx.lineJoin = 'round';
-    octx.stroke(ink.strokes);
-    octx.fill(ink.fills);
+    octx.fillStyle = layerColors[i];
+    octx.fill(sil.path, 'evenodd');
   }
+  octx.setTransform(1, 0, 0, 1, 0, 0);
   const a = document.createElement('a');
   a.download = 'code_' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.png';
   a.href = off.toDataURL('image/png');
