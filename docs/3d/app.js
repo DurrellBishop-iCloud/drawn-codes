@@ -7,10 +7,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-import { GridModel, computeFill } from '../engine.js?v=w022';
-import { traceSilhouette } from '../silhouette.js?v=w022';
+import { GridModel, computeFill } from '../engine.js?v=w023';
+import { traceSilhouette } from '../silhouette.js?v=w023';
 
-export const APP_VERSION = '3d0.2.2';
+export const APP_VERSION = '3d0.2.3';
 const LAYER_COUNT = 4;
 const TRACE_SAMPLES = 48;    // export-grade precision
 
@@ -148,7 +148,11 @@ function rebuild() {
     solids[li] = null;
     if (m.isEmpty) continue;
     const fill = drawing.fillOn[li] ? computeFill(m) : null;
-    const sil = traceSilhouette(m, fill, TRACE_SAMPLES);
+    // each level traces a whisker larger (lower iso) so upper walls
+    // strictly cloak lower ones — no seams at any angle, and slicers
+    // prefer a slight overlap between colour bodies
+    const iso = Math.max(45, 127.5 - built * 50);
+    const sil = traceSilhouette(m, fill, TRACE_SAMPLES, iso);
     if (!sil || !sil.loops.length) continue;
     const shapes = buildShapes(sil.loops);
     if (!shapes.length) continue;

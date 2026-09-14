@@ -1,8 +1,8 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w022';
-import { traceSilhouette } from './silhouette.js?v=w022';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w023';
+import { traceSilhouette } from './silhouette.js?v=w023';
 
-export const APP_VERSION = 'w0.2.2';
+export const APP_VERSION = 'w0.2.3';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;

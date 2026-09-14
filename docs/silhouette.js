@@ -10,7 +10,7 @@
 // Slivers and staircase artifacts are unrepresentable: there is one
 // continuous field and one contour, not pieces with seams.
 
-import { computeFill, buildInk, STROKE } from './engine.js?v=w022';
+import { computeFill, buildInk, STROKE } from './engine.js?v=w023';
 
 export const BLUR_CELLS = 0.09;
 
@@ -19,7 +19,7 @@ export const BLUR_CELLS = 0.09;
  * array of closed [x,y] rings in cell units (cell centres on integers)
  * and path is a ready Path2D (even-odd). Null for an empty model.
  */
-export function traceSilhouette(model, fill, samplesPerCell = 16) {
+export function traceSilhouette(model, fill, samplesPerCell = 16, iso = 127.5) {
   const b = model.bounds();
   if (!b) return null;
   const S = samplesPerCell;
@@ -55,7 +55,7 @@ export function traceSilhouette(model, fill, samplesPerCell = 16) {
   }
 
   // ---- marching squares at iso = 127.5 --------------------------------
-  const loops = marchingSquares(field, W, H, 127.5).map(chaikin);
+  const loops = marchingSquares(field, W, H, iso).map(chaikin);
 
   const path = new Path2D();
   for (const loop of loops) {
