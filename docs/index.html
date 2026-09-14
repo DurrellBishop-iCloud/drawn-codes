@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Drawn Codes</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #fff;
+               font-family: -apple-system, system-ui, sans-serif;
+               -webkit-user-select: none; user-select: none; }
+  #canvas { position: fixed; inset: 0; touch-action: none; cursor: crosshair; }
+  .chiprow { position: fixed; top: 8px; left: 8px; right: 8px; display: flex;
+             gap: 6px; align-items: center; pointer-events: none; }
+  .chip { pointer-events: auto; padding: 7px 14px; font-size: 13px;
+          background: rgba(0,0,0,.11); color: rgba(0,0,0,.55);
+          cursor: pointer; border: none; border-radius: 2px; }
+  .chip.on { background: rgba(0,0,0,.8); color: #fff; }
+  .spacer { flex: 1; }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 6px;
+         padding: 8px; background: #141414; }
+  .bar button { flex: 1; height: 44px; font-size: 13px; border: none;
+                background: #323232; color: #fff; cursor: pointer; border-radius: 2px; }
+  .bar button.on { background: #285a96; }
+  #dots { position: fixed; right: 12px; bottom: 76px; display: flex;
+          flex-direction: column; gap: 8px; }
+  .dot { width: 34px; height: 34px; border-radius: 50%; cursor: grab;
+         border: 1px solid rgba(0,0,0,.3); box-sizing: border-box; touch-action: none; }
+  .dot.active { border: 3px solid #3c3c3c; }
+  #ver { position: fixed; left: 10px; bottom: 66px; font-size: 11px; color: #b4b4b4; }
+  input[type=color] { position: fixed; visibility: hidden; }
+  @media (min-width: 900px) {
+    .chip { padding: 8px 18px; }
+    .bar { left: auto; right: 0; width: 480px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div class="chiprow">
+  <button class="chip" id="undo">UNDO</button>
+  <button class="chip" id="pick">＋</button>
+  <div class="spacer"></div>
+  <button class="chip" id="c45">45</button>
+  <button class="chip" id="c90">90</button>
+  <button class="chip" id="cfill">FILL</button>
+</div>
+<div id="dots"></div>
+<div id="ver"></div>
+<div class="bar">
+  <button id="erase">ERASE</button>
+  <button id="snap" class="on">SNAP</button>
+  <button id="clear">CLEAR</button>
+  <button id="fit">FIT</button>
+  <button id="save">SAVE</button>
+</div>
+<input type="color" id="colorinput">
+<script type="module" src="main.js"></script>
+</body>
+</html>
