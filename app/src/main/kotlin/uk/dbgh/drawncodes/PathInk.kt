@@ -119,8 +119,36 @@ object PathInk {
             appendRounded(strokes, pts, closed = true)
         }
 
-        // ---- fills: diamonds on diagonal crossings, dots ---------------
+        // ---- fills: junction fillets, diamonds, dots -------------------
         val fills = Path()
+
+        // Concave fillets in the crooks where a branch meets a route (or
+        // another branch): adjacent unpaired edge-ends get the tile-era
+        // inside radius (0.25 cell at 90°/135°, 0.15 at 45°). Paired turns
+        // need none — the stroke's own inner edge is already an arc.
+        for ((nodeKey, ends) in incident) {
+            if (ends.size < 2) continue
+            val nx = nodeKey.toInt().toFloat()
+            val ny = (nodeKey shr 32).toInt().toFloat()
+            val sorted = ends.sortedBy { (angleOf(it) + 360f) % 360f }
+            for (k in sorted.indices) {
+                val e1 = sorted[k]
+                val e2 = sorted[(k + 1) % sorted.size]
+                if (partner[e1] == e2) continue
+                val a1 = (angleOf(e1) + 360f) % 360f
+                var a2 = (angleOf(e2) + 360f) % 360f
+                if (k + 1 == sorted.size) a2 += 360f
+                val gap = a2 - a1
+                val rf = when {
+                    gap == 90f || gap == 135f -> 0.25f
+                    gap == 45f -> 0.15f
+                    else -> continue
+                }
+                addSectorFillet(fills, nx, ny, a1, gap, STROKE / 2f, rf)
+                addHalfStrip(fills, nx, ny, a1, +90f, STROKE / 2f)
+                addHalfStrip(fills, nx, ny, a2, -90f, STROKE / 2f)
+            }
+        }
         model.forEach { r, c, code ->
             if (code and GridModel.SHAPE_MASK == 0 && code and GridModel.TOUCHED != 0) {
                 fills.addCircle(c.toFloat(), r.toFloat(), STROKE / 2f, Path.Direction.CW)
@@ -138,6 +166,45 @@ object PathInk {
             }
         }
         return Ink(strokes, fills)
+    }
+
+    /**
+     * Concave fillet for the sector between two arms `gap` degrees apart:
+     * bounded by the arms' edges (half-width v) and an arc of radius rf
+     * tangent to both. Coordinates in cell units around (cx, cy).
+     */
+    private fun addSectorFillet(path: Path, cx: Float, cy: Float,
+                                a1: Float, gap: Float, v: Float, rf: Float) {
+        val half = Math.toRadians(gap / 2.0)
+        val bis = Math.toRadians((a1 + gap / 2f).toDouble())
+        val pDist = (v / sin(half)).toFloat()
+        val cDist = ((v + rf) / sin(half)).toFloat()
+        val ax = cx + cDist * cos(bis).toFloat()
+        val ay = cy + cDist * sin(bis).toFloat()
+        path.moveTo(cx + pDist * cos(bis).toFloat(), cy + pDist * sin(bis).toFloat())
+        val start = Math.toRadians((a1 - 90f).toDouble())
+        val sweep = Math.toRadians((gap - 180f).toDouble())
+        for (k in 0..12) {
+            val a = start + sweep * k / 12
+            path.lineTo(ax + rf * cos(a).toFloat(), ay + rf * sin(a).toFloat())
+        }
+        path.close()
+    }
+
+    /** Strip from an arm's centreline to its edge on one side, so fillet
+     *  edges always sit on straight ink even where a route curves away. */
+    private fun addHalfStrip(path: Path, cx: Float, cy: Float,
+                             angleDeg: Float, sideDeg: Float, v: Float) {
+        val a = Math.toRadians(angleDeg.toDouble())
+        val n = Math.toRadians((angleDeg + sideDeg).toDouble())
+        val dx = cos(a).toFloat(); val dy = sin(a).toFloat()
+        val nx = cos(n).toFloat() * v; val ny = sin(n).toFloat() * v
+        val len = 1.05f
+        path.moveTo(cx, cy)
+        path.lineTo(cx + dx * len, cy + dy * len)
+        path.lineTo(cx + dx * len + nx, cy + dy * len + ny)
+        path.lineTo(cx + nx, cy + ny)
+        path.close()
     }
 
     /**
