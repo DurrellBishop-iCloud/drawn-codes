@@ -1,7 +1,7 @@
 // Drawn Codes web — viewport, input, rendering, layers, UI, storage.
-import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w013';
+import { GridModel, computeFill, buildInk, STROKE } from './engine.js?v=w014';
 
-export const APP_VERSION = 'w0.1.3';
+export const APP_VERSION = 'w0.1.4';
 const LAYER_COUNT = 4;
 const DEFAULT_COLORS = ['#000000', '#e0362c', '#1d6fe0', '#f2a900'];
 const CORNER_ZONE = 0.38;
@@ -411,19 +411,27 @@ function rebuildDots() {
         rebuildDots(); restyleChips(); syncColorInput();
       } else {
         const slots = Math.round(dy / 42);
-        if (slots !== 0) {
-          const display = [...layerOrder].reverse();
-          const pos = display.indexOf(li);
+        const display = [...layerOrder].reverse();
+        const pos = display.indexOf(li);
+        if (slots !== 0 && pos >= 0) {
           const np = Math.min(display.length - 1, Math.max(0, pos + slots));
           display.splice(pos, 1);
           display.splice(np, 0, li);
           const back = display.reverse();
-          for (let k = 0; k < back.length; k++) layerOrder[k] = back[k];
+          if (new Set(back).size === LAYER_COUNT) {
+            for (let k = 0; k < back.length; k++) layerOrder[k] = back[k];
+          }
           rebuildDots(); draw();
         }
       }
       saveState();
     });
+    d.addEventListener('pointercancel', () => {
+      d.style.transform = '';
+      dragging = false;
+      rebuildDots();
+    });
+    d.addEventListener('lostpointercapture', () => { d.style.transform = ''; });
     col.appendChild(d);
   }
 }

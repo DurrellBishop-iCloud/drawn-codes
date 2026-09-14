@@ -85,6 +85,8 @@ object PathInk {
         // ---- walk paths ------------------------------------------------
         val visited = BooleanArray(n)
         val strokes = Path()
+        var lastEndEdge = -1
+        var lastEndSide = -1
 
         fun walk(startEdge: Int, startSide: Int): ArrayList<FloatArray> {
             val pts = ArrayList<FloatArray>()
@@ -96,6 +98,8 @@ object PathInk {
                 visited[e] = true
                 pts.add(floatArrayOf(nodeX(e, 1 - side).toFloat(),
                                      nodeY(e, 1 - side).toFloat()))
+                lastEndEdge = e
+                lastEndSide = 1 - side
                 val next = partner[End(e, 1 - side)] ?: break
                 if (visited[next.edge]) break
                 e = next.edge
@@ -104,12 +108,47 @@ object PathInk {
             return pts
         }
 
+        fun gapAbs(a: Float, b: Float): Float {
+            var d = kotlin.math.abs(a - b) % 360f
+            if (d > 180f) d = 360f - d
+            return d
+        }
+
+        // Tangent merge: a branch meeting other ink at a shallow angle
+        // doesn't stop at the node — it continues one edge ALONG the
+        // neighbour (a 45° deviation), and the corner arc turns that into
+        // a railway-switch merge whose outer sweep fills what would
+        // otherwise be a sharp 45° crook.
+        fun mergePoint(endEdge: Int, endSide: Int): FloatArray? {
+            val id = End(endEdge, endSide)
+            val k = key(nodeX(endEdge, endSide), nodeY(endEdge, endSide))
+            val ends = incident[k] ?: return null
+            val aB = (angleOf(id) + 360f) % 360f
+            var best: End? = null
+            for (m in ends) {
+                if (m == id) continue
+                if (Math.round(gapAbs((angleOf(m) + 360f) % 360f, aB)) != 135) continue
+                if (best == null || (partner.containsKey(m) && !partner.containsKey(best))) best = m
+            }
+            val b = best ?: return null
+            return floatArrayOf(nodeX(b.edge, 1 - b.side).toFloat(),
+                                nodeY(b.edge, 1 - b.side).toFloat())
+        }
+
         for (e in 0 until n) {
             if (visited[e]) continue
-            val pts = when {
-                partner[End(e, 0)] == null -> walk(e, 0)
-                partner[End(e, 1)] == null -> walk(e, 1)
+            val startSide = when {
+                partner[End(e, 0)] == null -> 0
+                partner[End(e, 1)] == null -> 1
                 else -> continue
+            }
+            val pts = walk(e, startSide)
+            mergePoint(e, startSide)?.let { pts.add(0, it) }
+            mergePoint(lastEndEdge, lastEndSide)?.let { tail ->
+                if (pts.size < 2 || tail[0] != pts[pts.size - 2][0] ||
+                    tail[1] != pts[pts.size - 2][1]) {
+                    pts.add(tail)
+                }
             }
             appendRounded(strokes, pts, closed = false)
         }

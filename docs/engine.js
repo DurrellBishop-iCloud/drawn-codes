@@ -284,10 +284,61 @@ export function buildInk(model) {
     }
     return pts;
   };
+  const gapAbs = (a, b) => {
+    let d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  };
+  // Tangent merge: a branch meeting other ink at a shallow angle doesn't
+  // stop at the node — it continues one edge ALONG the neighbour (a 45°
+  // deviation), and the corner arc turns that into a railway-switch merge
+  // whose outer sweep fills what would otherwise be a sharp 45° crook.
+  const mergePoint = (endEdge, endSide) => {
+    const id = endId(endEdge, endSide);
+    const k = nodeX(endEdge, endSide) + ',' + nodeY(endEdge, endSide);
+    const ends = incident.get(k) || [];
+    const aB = (angleOf(id) + 360) % 360;
+    let best = null;
+    for (const m of ends) {
+      if (m === id) continue;
+      if (Math.round(gapAbs((angleOf(m) + 360) % 360, aB)) !== 135) continue;
+      if (best === null || (partner.has(m) && !partner.has(best))) best = m;
+    }
+    if (best === null) return null;
+    const me = best >> 1, ms = best & 1;
+    return [nodeX(me, 1 - ms), nodeY(me, 1 - ms)];
+  };
   for (let e = 0; e < n; e++) {
     if (visited[e]) continue;
-    if (partner.get(endId(e, 0)) === undefined) appendRounded(strokes, walk(e, 0), false);
-    else if (partner.get(endId(e, 1)) === undefined) appendRounded(strokes, walk(e, 1), false);
+    let startSide = -1;
+    if (partner.get(endId(e, 0)) === undefined) startSide = 0;
+    else if (partner.get(endId(e, 1)) === undefined) startSide = 1;
+    if (startSide < 0) continue;
+    const pts = walk(e, startSide);
+    const head = mergePoint(e, startSide);
+    if (head) pts.unshift(head);
+    // the walk's far end: find the arriving edge-end without a partner
+    // (last edge in the traversal) and extend past it too
+    let le = e, ls = startSide;
+    {
+      let ce = e, cs = startSide;
+      for (;;) {
+        const next = partner.get(endId(ce, 1 - cs));
+        if (next === undefined) { le = ce; ls = 1 - cs; break; }
+        const ne = next >> 1;
+        if (ne === ce || !visited[ne]) { le = ce; ls = 1 - cs; break; }
+        const cont = next;
+        const contE = cont >> 1, contS = cont & 1;
+        if (contE === e && contS === startSide) { le = ce; ls = 1 - cs; break; }
+        ce = contE; cs = contS;
+        if (partner.get(endId(ce, 1 - cs)) === undefined) { le = ce; ls = 1 - cs; break; }
+      }
+    }
+    const tail = mergePoint(le, ls);
+    if (tail && (pts.length < 2 ||
+        tail[0] !== pts[pts.length - 2][0] || tail[1] !== pts[pts.length - 2][1])) {
+      pts.push(tail);
+    }
+    appendRounded(strokes, pts, false);
   }
   for (let e = 0; e < n; e++) {
     if (!visited[e]) appendRounded(strokes, walk(e, 0), true);
